@@ -268,89 +268,164 @@ for (let i = 0; i < 20; i++) {
   scene.add(hill);
 }
 
-// --- Terrain-aligned forest ---------------------------------------------------
-const trunkMaterial = new THREE.MeshStandardMaterial({
-  color: 0x59402e,
-  roughness: 1
-});
-const spruceMaterials = [
-  new THREE.MeshStandardMaterial({ color: 0x173f35, roughness: 1 }),
-  new THREE.MeshStandardMaterial({ color: 0x205343, roughness: 1 }),
-  new THREE.MeshStandardMaterial({ color: 0x2c624b, roughness: 1 })
-];
-const trunkGeometry = new THREE.CylinderGeometry(0.18, 0.28, 3.2, 7);
-const spruceTierGeometry = [
-  new THREE.ConeGeometry(2.8, 5.2, 7),
-  new THREE.ConeGeometry(2.25, 4.8, 7),
-  new THREE.ConeGeometry(1.7, 4.2, 7)
-];
-
-// 100x forest density, rendered with instancing to keep draw calls low.
-// Individual tree trunks still get collision through a small spatial grid.
-const TREE_COUNT = 24500;
-const treeColliders = [];
+// --- Diverse, performance-conscious forest ----------------------------------
+// A more open forest: fewer trees, varied silhouettes, natural colour variation,
+// and occasional tall-trunk trees. All trees are instanced for low draw-call cost.
+const TREE_COUNT = 5600;
 const TREE_CELL_SIZE = 12;
 const treeCollisionGrid = new Map();
-const treeTrunkInstances = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, TREE_COUNT);
-const treeCrownInstances = spruceTierGeometry.map((geometry, tier) =>
-  new THREE.InstancedMesh(geometry, spruceMaterials[tier], TREE_COUNT)
+const treeTrunkMaterial = new THREE.MeshStandardMaterial({ color: 0x60432f, roughness: 1 });
+const spruceLeafMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0x174536, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x245b45, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x356b4d, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x456f4d, roughness: 1 })
+];
+const broadleafMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0x527d42, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x668b49, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x789653, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x3e7044, roughness: 1 })
+];
+const tallTreeMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0x315b3d, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x477348, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x5c8148, roughness: 1 })
+];
+
+const standardTrunkGeometry = new THREE.CylinderGeometry(0.2, 0.32, 3.2, 7);
+const spruceCrownGeometries = [
+  new THREE.ConeGeometry(2.65, 5.0, 7),
+  new THREE.ConeGeometry(2.15, 4.5, 7),
+  new THREE.ConeGeometry(1.6, 3.9, 7)
+];
+const broadleafCrownGeometry = new THREE.SphereGeometry(2.35, 8, 7);
+const tallCrownGeometry = new THREE.ConeGeometry(2.35, 7.2, 7);
+const oakClusterGeometry = new THREE.SphereGeometry(1.55, 7, 6);
+
+const spruceTrunks = new THREE.InstancedMesh(standardTrunkGeometry, treeTrunkMaterial, TREE_COUNT);
+const broadleafTrunks = new THREE.InstancedMesh(standardTrunkGeometry, treeTrunkMaterial, TREE_COUNT);
+const tallTrunks = new THREE.InstancedMesh(standardTrunkGeometry, treeTrunkMaterial, TREE_COUNT);
+const spruceCrowns = spruceCrownGeometries.map((geometry, tier) =>
+  new THREE.InstancedMesh(geometry, spruceLeafMaterials[tier], TREE_COUNT)
 );
-treeTrunkInstances.castShadow = false;
-treeTrunkInstances.receiveShadow = false;
-treeCrownInstances.forEach((mesh) => {
+const broadleafCrowns = broadleafMaterials.map(material =>
+  new THREE.InstancedMesh(broadleafCrownGeometry, material, TREE_COUNT)
+);
+const broadleafClusters = broadleafMaterials.map(material =>
+  new THREE.InstancedMesh(oakClusterGeometry, material, TREE_COUNT)
+);
+const tallCrowns = tallTreeMaterials.map(material =>
+  new THREE.InstancedMesh(tallCrownGeometry, material, TREE_COUNT)
+);
+const allTreeMeshes = [
+  spruceTrunks, broadleafTrunks, tallTrunks,
+  ...spruceCrowns, ...broadleafCrowns, ...broadleafClusters, ...tallCrowns
+];
+allTreeMeshes.forEach(mesh => {
   mesh.castShadow = false;
   mesh.receiveShadow = false;
+  mesh.frustumCulled = true;
 });
+
 const treeDummy = new THREE.Object3D();
 const reservedVillageZones = [
   { x: -42, z: -76 }, { x: 112, z: 82 }, { x: -96, z: 42 }
 ];
+const speciesCounts = [0, 0, 0];
 let placedTrees = 0;
 let attempts = 0;
-while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 12) {
+
+while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 15) {
   attempts++;
   const x = (Math.random() - 0.5) * 480;
   const z = (Math.random() - 0.5) * 480;
-  if (Math.abs(x - roadCenterX(z)) < 10) continue;
-  if (Math.abs(z - (Math.sin(x * 0.014) * 5 - 28)) < 8) continue;
-  if (Math.abs(x - riverCenterX(z)) < 11) continue;
-  if (reservedVillageZones.some(v => Math.hypot(x - v.x, z - v.z) < 34)) continue;
+  if (Math.abs(x - roadCenterX(z)) < 11) continue;
+  if (Math.abs(z - (Math.sin(x * 0.014) * 5 - 28)) < 9) continue;
+  if (Math.abs(x - riverCenterX(z)) < 12) continue;
+  if (reservedVillageZones.some(v => Math.hypot(x - v.x, z - v.z) < 36)) continue;
 
-  const scale = 1.35 + Math.random() * 0.65;
+  // 48% spruce, 34% broadleaf, 18% tall-trunk woodland trees.
+  const roll = Math.random();
+  const species = roll < 0.48 ? 0 : roll < 0.82 ? 1 : 2;
+  const index = speciesCounts[species]++;
+  const scale = species === 1
+    ? 1.0 + Math.random() * 0.65
+    : 1.15 + Math.random() * 0.75;
   const rotation = Math.random() * Math.PI * 2;
   const groundY = terrainHeight(x, z);
-  treeDummy.position.set(x, groundY + 1.6 * scale, z);
-  treeDummy.rotation.set(0, rotation, 0);
-  treeDummy.scale.setScalar(scale);
-  treeDummy.updateMatrix();
-  treeTrunkInstances.setMatrixAt(placedTrees, treeDummy.matrix);
+  const trunkLength = species === 2
+    ? 7.0 + Math.random() * 5.0
+    : species === 1
+      ? 3.8 + Math.random() * 2.0
+      : 3.2 + Math.random() * 1.3;
+  const trunkRadius = species === 2 ? 0.72 : species === 1 ? 0.58 : 0.46;
 
-  for (let tier = 0; tier < 3; tier++) {
-    treeDummy.position.set(x, groundY + (3.4 + tier * 1.9) * scale, z);
+  // Scale trunk height independently so some trees have visibly long bare trunks.
+  treeDummy.position.set(x, groundY + trunkLength * scale / 2, z);
+  treeDummy.rotation.set(0, rotation, 0);
+  treeDummy.scale.set(trunkRadius * scale, (trunkLength / 3.2) * scale, trunkRadius * scale);
+  treeDummy.updateMatrix();
+  const trunkMesh = species === 0 ? spruceTrunks : species === 1 ? broadleafTrunks : tallTrunks;
+  trunkMesh.setMatrixAt(index, treeDummy.matrix);
+
+  if (species === 0) {
+    for (let tier = 0; tier < 3; tier++) {
+      treeDummy.position.set(x, groundY + (trunkLength + 2.4 + tier * 1.75) * scale, z);
+      treeDummy.rotation.set(0, rotation, 0);
+      treeDummy.scale.setScalar(scale);
+      treeDummy.updateMatrix();
+      spruceCrowns[tier].setMatrixAt(index, treeDummy.matrix);
+    }
+  } else if (species === 1) {
+    const crownY = groundY + (trunkLength + 1.7) * scale;
+    treeDummy.position.set(x, crownY, z);
     treeDummy.rotation.set(0, rotation, 0);
-    treeDummy.scale.setScalar(scale);
+    treeDummy.scale.setScalar(scale * 1.15);
     treeDummy.updateMatrix();
-    treeCrownInstances[tier].setMatrixAt(placedTrees, treeDummy.matrix);
+    broadleafCrowns[index % broadleafCrowns.length].setMatrixAt(index, treeDummy.matrix);
+    // Three overlapping leaf clusters make broadleaf crowns less spherical.
+    for (let cluster = 0; cluster < 3; cluster++) {
+      const angle = rotation + cluster * Math.PI * 2 / 3;
+      treeDummy.position.set(
+        x + Math.cos(angle) * 1.25 * scale,
+        crownY + (cluster === 1 ? 0.45 : -0.15) * scale,
+        z + Math.sin(angle) * 1.25 * scale
+      );
+      treeDummy.scale.setScalar(scale * 0.78);
+      treeDummy.updateMatrix();
+      broadleafClusters[index % broadleafClusters.length].setMatrixAt(index * 3 + cluster, treeDummy.matrix);
+    }
+  } else {
+    treeDummy.position.set(x, groundY + (trunkLength + 3.4) * scale, z);
+    treeDummy.rotation.set(0, rotation, 0);
+    treeDummy.scale.set(scale * 1.2, scale * 1.05, scale * 1.2);
+    treeDummy.updateMatrix();
+    tallCrowns[index % tallCrowns.length].setMatrixAt(index, treeDummy.matrix);
   }
 
   const cellX = Math.floor(x / TREE_CELL_SIZE);
   const cellZ = Math.floor(z / TREE_CELL_SIZE);
   const cellKey = cellX + ',' + cellZ;
   if (!treeCollisionGrid.has(cellKey)) treeCollisionGrid.set(cellKey, []);
-  const collider = { x, z, radius: 0.62 * scale + 0.48 };
-  treeCollisionGrid.get(cellKey).push(collider);
-  treeColliders.push(collider);
+  treeCollisionGrid.get(cellKey).push({
+    x, z,
+    radius: Math.max(0.62, trunkRadius * scale + 0.42)
+  });
   placedTrees++;
 }
-treeTrunkInstances.count = placedTrees;
-treeTrunkInstances.instanceMatrix.needsUpdate = true;
-scene.add(treeTrunkInstances);
-for (const mesh of treeCrownInstances) {
-  mesh.count = placedTrees;
+
+spruceTrunks.count = speciesCounts[0];
+broadleafTrunks.count = speciesCounts[1];
+tallTrunks.count = speciesCounts[2];
+spruceCrowns.forEach(mesh => { mesh.count = speciesCounts[0]; });
+broadleafCrowns.forEach(mesh => { mesh.count = speciesCounts[1]; });
+broadleafClusters.forEach(mesh => { mesh.count = speciesCounts[1] * 3; });
+tallCrowns.forEach(mesh => { mesh.count = speciesCounts[2]; });
+allTreeMeshes.forEach(mesh => {
   mesh.instanceMatrix.needsUpdate = true;
   scene.add(mesh);
-}
-
+});
 // Instanced grass keeps draw calls low.
 const grassGeometry = new THREE.ConeGeometry(0.13, 0.65, 4);
 const grassMaterial = new THREE.MeshStandardMaterial({
@@ -837,7 +912,7 @@ function animate() {
   function blockedByTree(x, z) {
     const cellX = Math.floor(x / TREE_CELL_SIZE);
     const cellZ = Math.floor(z / TREE_CELL_SIZE);
-    // Only inspect nearby grid cells instead of all 24,500 trees each frame.
+    // Only inspect nearby grid cells instead of all 5,600 trees each frame.
     for (let gx = cellX - 1; gx <= cellX + 1; gx++) {
       for (let gz = cellZ - 1; gz <= cellZ + 1; gz++) {
         const nearby = treeCollisionGrid.get(gx + ',' + gz);
