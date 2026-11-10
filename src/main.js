@@ -464,10 +464,11 @@ const reservedVillageZones = [
 
 // Keep forest placement clear of every dirt lane, not just the two main roads.
 // Sample the same curved paths used to build the village lanes.
+const eastCrossZ = Math.sin(112 * 0.014) * 5 - 28;
 const villageLanePaths = [
-  [[-42, -53], [-24.4, -50], [roadCenterX(-75) - 3, -75], [roadCenterX(-75), -75]],
-  [[112, 105], [120, 18], [116, Math.sin(112 * 0.014) * 5 - 18], [112, Math.sin(112 * 0.014) * 5 - 28]],
-  [[-96, 19], [-55.68, 22], [roadCenterX(43) - 3, 43], [roadCenterX(43), 43]]
+  [[-42, -53], [-24.36, -50], [roadCenterX(-53) - 3, -52], [roadCenterX(-53), -53]],
+  [[112, 59], [120, 18], [116, eastCrossZ + 10], [112, eastCrossZ]],
+  [[-96, 19], [-55.68, 22], [roadCenterX(19) - 3, 20], [roadCenterX(19), 19]]
 ].map(points => new THREE.CatmullRomCurve3(points.map(([px, pz]) => new THREE.Vector3(px, 0, pz))));
 
 function distanceToSegment2D(px, pz, ax, az, bx, bz) {
