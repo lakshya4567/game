@@ -254,3 +254,13 @@ The tree models are real GLB geometry, but the oak's detailed leaf mesh and the 
 
 - Fixed a JavaScript temporal-dead-zone error by declaring the far-tree distance constants before deriving the shared tree-culling distance.
 - This prevents the world module from failing during startup before the loading screen can finish.
+
+
+## Drivable sports car
+
+- Added a separate red sports car parked beside the starting road.
+- Press **E** while standing close to the car to enter; press **E** again to exit.
+- **W / Up Arrow** accelerates, **S / Down Arrow** reverses, **A / D** or arrow keys steer, and **Space** brakes.
+- The car accelerates smoothly up to 34 world units per second (about 122 km/h on the HUD), with a reverse limit of 12 units per second.
+- The chase camera follows the car while driving, and the car checks the existing house and tree collision systems.
+- Added an on-screen speed display and updated the controls hint.
