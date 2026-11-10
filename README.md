@@ -220,3 +220,11 @@ The tree models are real GLB geometry, but the oak's detailed leaf mesh and the 
 - Reduced the renderer pixel-ratio cap to 1.0 and removed per-frame river normal recalculation.
 - Kept ordinary Three.js object frustum culling enabled; visible terrain, roads and landmarks remain in the scene.
 - Performance still needs to be checked on the target PC. These changes trade some distant scenery detail for smoother gameplay.
+
+
+## Latest building level-of-detail update
+
+- Added three distance-based building detail levels: the full GLB house model at close range, the existing detailed procedural house at medium range, and a simplified wall-and-roof silhouette at long range.
+- House detail changes are updated alongside the forest LOD checks, rather than rebuilding models every frame.
+- The existing instanced low-poly tree shapes continue to act as the distant tree representation, while nearby trees can switch to the detailed GLB assets.
+- The distance thresholds are conservative starting values and should be tuned after checking frame rate and visual transitions on the target PC.
