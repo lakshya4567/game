@@ -709,7 +709,7 @@ async function loadDetailedTreeAsset(species, url, targetHeight) {
     if (!meshes.length) throw new Error('Tree GLB contains no mesh objects');
     detailedTreeAssets.set(species, { meshes, active: [] });
   } catch (error) {
-    console.warn('Tree GLB could not be loaded; keeping its lightweight forest proxies.', error);
+    console.error('Tree GLB failed to load. Keeping lightweight forest proxies. Check the model URL/network/CORS:', url, error);
   }
 }
 
@@ -894,7 +894,7 @@ async function replaceHouseWithGLB(house, style, collider, width, depth, wallHei
     collider.halfWidth = size.x * fitScale * outerScale / 2 + 0.55;
     collider.halfDepth = size.z * fitScale * outerScale / 2 + 0.55;
   } catch (error) {
-    console.warn('House GLB could not be loaded; keeping its procedural fallback.', error);
+    console.error('House GLB failed to load. Keeping procedural fallback. Check the model URL/network/CORS:', HOUSE_MODEL_URLS[Math.abs(style) % HOUSE_MODEL_URLS.length], error);
   }
 }
 
