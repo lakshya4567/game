@@ -28,6 +28,27 @@ A single-player, third-person 3D browser game prototype built with **Three.js**,
 
 6. Open the local URL printed by Vite, usually `http://localhost:5173`.
 
+## Deploy to GitHub Pages
+
+This repository includes a GitHub Actions workflow at `.github/workflows/deploy.yml`.
+Every push to the `main` branch automatically builds the game and deploys the
+production files to GitHub Pages. You can also start a deployment manually from
+the **Actions** tab by selecting **Deploy game to GitHub Pages** and choosing
+**Run workflow**.
+
+### One-time GitHub setup
+
+1. Open this repository's **Settings → Pages**.
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**.
+3. Open the **Actions** tab and wait for **Deploy game to GitHub Pages** to finish.
+4. Visit: https://lakshya4567.github.io/game/
+
+The Vite configuration automatically uses `/game/` for GitHub Actions builds,
+while keeping `/` for local development.
+
+If the site does not appear immediately, check the latest workflow run in the
+Actions tab. The first deployment can take a few minutes.
+
 ## Controls
 
 | Control | Action |
@@ -78,7 +99,7 @@ A single-player, third-person 3D browser game prototype built with **Three.js**,
 3. Add detailed rocks, shrubs, village buildings and landmarks.
 4. Add drivable vehicles and enter/exit interaction.
 5. Add chunk-based world streaming and level-of-detail.
-6. Add settings, save/load and deployment.
+6. Add settings and save/load.
 
 ## Performance notes
 
