@@ -236,3 +236,11 @@ The tree models are real GLB geometry, but the oak's detailed leaf mesh and the 
 - Added subtle low-resolution wall and roof surface textures using small reusable textures.
 - Medium LODs retain only the main walls, roof, a small number of windows and a door; small decorative details are omitted.
 - Far LODs remain simple colour silhouettes for low rendering cost.
+
+
+## Tree distance LOD update
+
+- Close trees use the detailed local GLB assets where available.
+- Medium-distance trees use the existing multi-part procedural tree shapes.
+- Far-distance trees switch to a much lighter trunk-and-crown representation, with simple materials and no shadows.
+- Tree visibility is culled outside the camera view and beyond the 260-unit forest range.
