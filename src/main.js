@@ -632,7 +632,7 @@ const TREE_MODEL_URLS = [
 const TREE_MODEL_HEIGHTS = [15.5, 8.5, 13.5];
 const TREE_MODEL_POOL_SIZE = 7;
 const TREE_MODEL_DISTANCE = 48;
-const TREE_CULL_DISTANCE = 118;
+const TREE_CULL_DISTANCE = FAR_TREE_CULL_DISTANCE;
 const cameraFrustum = new THREE.Frustum();
 const cameraViewProjection = new THREE.Matrix4();
 const treeCullSphere = new THREE.Sphere(new THREE.Vector3(), 9);
@@ -654,6 +654,74 @@ function getTreeProxyRefs(record) {
     { mesh: tallTrunks, index: record.index },
     { mesh: tallCrown, index: record.index }
   ];
+}
+
+// Far-distance forest LOD: one simple trunk and one low-poly crown per tree.
+// The current multi-cluster procedural trees remain the medium LOD; the GLBs
+// remain reserved for close views.
+const FAR_TREE_DISTANCE = 118;
+const FAR_TREE_CULL_DISTANCE = 260;
+const farTreeMeshes = [];
+const farTreeGeometry = [
+  new THREE.ConeGeometry(2.0, 7.0, 5),
+  new THREE.IcosahedronGeometry(2.5, 0),
+  new THREE.ConeGeometry(2.0, 7.0, 5)
+];
+const farTreeMaterials = [
+  new THREE.MeshBasicMaterial({ color: 0x28533c }),
+  new THREE.MeshBasicMaterial({ color: 0x587a45 }),
+  new THREE.MeshBasicMaterial({ color: 0x416b43 })
+];
+const farTrunkGeometry = new THREE.CylinderGeometry(0.18, 0.32, 3.4, 5);
+const farTrunkMaterial = new THREE.MeshBasicMaterial({ color: 0x60432f });
+const farTreeBySpecies = [0, 1, 2].map(species => {
+  const trunk = new THREE.InstancedMesh(farTrunkGeometry, farTrunkMaterial, TREE_COUNT);
+  const crown = new THREE.InstancedMesh(farTreeGeometry[species], farTreeMaterials[species], TREE_COUNT);
+  for (const mesh of [trunk, crown]) {
+    mesh.count = speciesCounts[species];
+    mesh.frustumCulled = true;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    scene.add(mesh);
+    farTreeMeshes.push(mesh);
+  }
+  return { trunk, crown };
+});
+
+const farTreeDummy = new THREE.Object3D();
+const hiddenFarTreeMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+for (const record of treeRecords) {
+  const pair = farTreeBySpecies[record.species];
+  const scale = record.modelScale;
+  farTreeDummy.position.set(record.x, record.groundY + 1.7 * scale, record.z);
+  farTreeDummy.rotation.set(0, record.rotation, 0);
+  farTreeDummy.scale.setScalar(scale);
+  farTreeDummy.updateMatrix();
+  pair.trunk.setMatrixAt(record.index, farTreeDummy.matrix);
+  farTreeDummy.position.set(record.x, record.groundY + 7.0 * scale, record.z);
+  farTreeDummy.scale.setScalar(scale * (record.species === 1 ? 1.0 : 0.9));
+  farTreeDummy.updateMatrix();
+  pair.crown.setMatrixAt(record.index, farTreeDummy.matrix);
+  record.farTreeRefs = [
+    { mesh: pair.trunk, index: record.index, original: pair.trunk.instanceMatrix.array.slice(record.index * 16, record.index * 16 + 16) },
+    { mesh: pair.crown, index: record.index, original: pair.crown.instanceMatrix.array.slice(record.index * 16, record.index * 16 + 16) }
+  ];
+  record.farTreeHidden = false;
+}
+for (const mesh of farTreeMeshes) mesh.instanceMatrix.needsUpdate = true;
+
+function setFarTreeHidden(record, hidden) {
+  if (record.farTreeHidden === hidden) return;
+  const matrix = new THREE.Matrix4();
+  for (const ref of record.farTreeRefs) {
+    if (hidden) ref.mesh.setMatrixAt(ref.index, hiddenFarTreeMatrix);
+    else {
+      matrix.fromArray(ref.original);
+      ref.mesh.setMatrixAt(ref.index, matrix);
+    }
+    ref.mesh.instanceMatrix.needsUpdate = true;
+  }
+  record.farTreeHidden = hidden;
 }
 
 for (const record of treeRecords) {
@@ -691,13 +759,19 @@ function updateTreeVisibility() {
   const px = player.position.x;
   const pz = player.position.z;
   const maxDistanceSq = TREE_CULL_DISTANCE * TREE_CULL_DISTANCE;
+  const farStartSq = FAR_TREE_DISTANCE * FAR_TREE_DISTANCE;
   for (const record of treeRecords) {
     const dx = record.x - px;
     const dz = record.z - pz;
-    const inRange = dx * dx + dz * dz < maxDistanceSq;
+    const distanceSq = dx * dx + dz * dz;
+    const inRange = distanceSq < maxDistanceSq;
     treeCullSphere.center.set(record.x, record.groundY + 6.5, record.z);
     record.outOfView = !inRange || !cameraFrustum.intersectsSphere(treeCullSphere);
-    setTreeProxyHidden(record, record.modelHidden);
+    // Mid-distance trees use the richer procedural instances; distant trees
+    // switch to one lightweight trunk/crown pair.
+    const useFar = distanceSq >= farStartSq && inRange && !record.outOfView;
+    setFarTreeHidden(record, !useFar);
+    setTreeProxyHidden(record, record.modelHidden || distanceSq >= farStartSq);
   }
 }
 
