@@ -244,3 +244,7 @@ The tree models are real GLB geometry, but the oak's detailed leaf mesh and the 
 - Medium-distance trees use the existing multi-part procedural tree shapes.
 - Far-distance trees switch to a much lighter trunk-and-crown representation, with simple materials and no shadows.
 - Tree visibility is culled outside the camera view and beyond the 260-unit forest range.
+
+## World startup initialization fix
+
+- Moved the player group declaration ahead of asynchronous tree and house model loading so LOD callbacks cannot access the player binding before initialization.
