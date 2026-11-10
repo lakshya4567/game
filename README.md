@@ -228,3 +228,11 @@ The tree models are real GLB geometry, but the oak's detailed leaf mesh and the 
 - House detail changes are updated alongside the forest LOD checks, rather than rebuilding models every frame.
 - The existing instanced low-poly tree shapes continue to act as the distant tree representation, while nearby trees can switch to the detailed GLB assets.
 - The distance thresholds are conservative starting values and should be tuned after checking frame rate and visual transitions on the target PC.
+
+
+## House LOD visual matching update
+
+- Reworked the medium-distance house models to keep the same approximate footprint, wall height and roof silhouette as the close models.
+- Added subtle low-resolution wall and roof surface textures using small reusable textures.
+- Medium LODs retain only the main walls, roof, a small number of windows and a door; small decorative details are omitted.
+- Far LODs remain simple colour silhouettes for low rendering cost.
