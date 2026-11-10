@@ -184,3 +184,27 @@ Update this README.md with every future project update, including new features, 
 - Increased tree-free shoulders beside the main road, crossroad, river and village lanes.
 - Added sampled curved-lane exclusion checks so trees cannot spawn in the middle of village roads.
 - Kept the forest instanced and low-poly to preserve performance on lower-end PCs.
+
+
+## Latest real-model environment update
+
+- Added the approved CC0 Norway spruce, detailed oak and silver birch GLB tree assets.
+- Added near/far tree detail switching: up to 30 nearby trees per species use the real GLB model, while distant trees keep the existing low-cost instanced geometry.
+- Tree GLBs are converted into instanced mesh batches, rather than creating a separate Three.js object for every tree.
+- Replaced village house placeholders with the approved bungalow, stone house and modern house GLB assets. The original procedural houses remain as a fallback if a model host is unavailable.
+- Kept model loading asynchronous and cached so each asset is downloaded only once per game session.
+- Adjusted house collision footprints to match the loaded model dimensions.
+- Model files are hosted by their original CC0 providers and loaded at runtime; the game therefore needs an internet connection to retrieve them. If a provider blocks loading or is unavailable, the procedural fallback remains visible.
+
+### Third-party model sources and licences
+
+All selected assets are published as CC0 by their providers:
+
+- [Mature Norway spruce tree — Innerscene](https://www.innerscene.com/tools/library/3d-parts/mature-norway-spruce-tree-48c2566f)
+- [Oak street tree, detailed leaves — Innerscene](https://www.innerscene.com/tools/library/3d-parts/oak-street-tree-detailed-leaves-a273fef9)
+- [Mature silver birch tree — Innerscene](https://www.innerscene.com/tools/library/3d-parts/mature-silver-birch-tree-8e297753)
+- [Bungalow — Grab3D](https://grab3d.com/models/buildings/bungalow/)
+- [Stone House — Grab3D](https://grab3d.com/models/buildings/stone-house/)
+- [Modern House — Grab3D](https://grab3d.com/models/buildings/modern-house/)
+
+The tree models are real GLB geometry, but the oak's detailed leaf mesh and the full house assets can still be demanding on older integrated graphics. The near/far tree split limits how many detailed tree instances are active at once; actual frame rate still needs testing on the target PC.
