@@ -144,3 +144,15 @@ Update this README.md with every future project update, including new features, 
 - Disabled tree shadow casting for this dense forest to reduce GPU load on lower-end computers.
 - The forest generator keeps trees clear of roads, the river corridor and village areas.
 - Performance may still vary significantly on older integrated graphics; if frame rate is low, reduce the tree count or render distance.
+
+
+## Latest woodland and visual polish update
+
+- Reduced the forest from 24,500 to a target of 5,600 trees for a more open, navigable world and better performance.
+- Added three tree silhouettes: layered spruce, broadleaf trees with clustered crowns, and tall-trunk woodland trees.
+- Tall-trunk trees now have longer exposed trunks and higher crowns; tree heights and foliage colours vary naturally.
+- Added per-instance foliage colour variation while keeping the trees instanced.
+- Kept tree-trunk collision and the nearby-cell spatial grid with the new tree population.
+- Added subtle vertex-colour variation across the meadow to avoid one flat green ground colour.
+- Refined sky and sunlight settings for a softer, warmer outdoor appearance.
+- Tree shadows remain disabled to keep the dense forest more manageable on older integrated graphics.
