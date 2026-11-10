@@ -74,7 +74,7 @@ Actions tab. The first deployment can take a few minutes.
 
 ## Latest update
 
-**Movement and world expansion update**
+**Village, traffic and visible river update**
 
 - Replaced the plain background with a Three.js sky and directional sunlight.
 - Added atmospheric fog and improved tone mapping.
@@ -82,7 +82,7 @@ Actions tab. The first deployment can take a few minutes.
 - Rebuilt the road as a terrain-following mesh.
 - Improved the procedural character from a simple capsule into a recognisable human-shaped placeholder.
 - Added simple arm and leg movement while walking and running.
-- Added smooth movement acceleration/braking, gradual turning and improved running animation.\n- Added a crossing road, a winding river with banks and larger layered spruce trees.\n- Kept the added environment procedural and lightweight for modest PCs.
+- Added smooth movement acceleration/braking, gradual turning and improved running animation.\n- Added a crossing road, larger layered spruce trees, roadside village clusters and simple moving traffic.\n- Carved a river channel into the terrain and raised the opaque glossy water surface so it remains visible.\n- Kept the added environment procedural and lightweight for modest PCs.
 
 ## Known limitations
 
@@ -90,7 +90,7 @@ Actions tab. The first deployment can take a few minutes.
 - Character collision with trees, roads and river banks is not implemented yet. The river is currently visual scenery and cannot be crossed as a physics obstacle.
 - The character follows terrain height, but does not yet tilt to match steep slopes.
 - The world is currently a bounded prototype; infinite/chunk-based terrain streaming is not implemented.
-- Trees are stylised low-poly models, not photorealistic asset models.
+- Trees, houses and cars are stylised procedural models, not photorealistic assets.\n- Cars are decorative traffic and cannot currently be entered or driven.\n- Villages are scenery; doors and buildings are not interactive.
 
 ## Planned milestones
 
