@@ -884,6 +884,9 @@ const doorMaterials = [
 ];
 
 const houseColliders = [];
+const houseLodRecords = [];
+const HOUSE_NEAR_DISTANCE = 58;
+const HOUSE_MID_DISTANCE = 132;
 const HOUSE_MODEL_URLS = [
   `${MODEL_ASSET_BASE}bungalow.glb`,
   `${MODEL_ASSET_BASE}stone-house.glb`,
@@ -917,20 +920,64 @@ async function replaceHouseWithGLB(house, style, collider, width, depth, wallHei
       }
     });
 
-    // Remove the procedural placeholder only after the GLB is ready.
-    while (house.children.length) {
-      const child = house.children[0];
-      house.remove(child);
-      child.traverse(object => {
-        if (object.geometry) object.geometry.dispose();
-      });
-    }
-    house.add(model);
+    // Keep the existing procedural building as the medium-distance LOD.
+    // The downloaded GLB is reserved for close views only.
+    const highDetail = new THREE.Group();
+    highDetail.add(model);
+    highDetail.visible = false;
+    house.add(highDetail);
+    house.userData.highDetail = highDetail;
+    house.userData.hasHighDetail = true;
     collider.halfWidth = size.x * fitScale * outerScale / 2 + 0.55;
     collider.halfDepth = size.z * fitScale * outerScale / 2 + 0.55;
+    updateHouseLOD(house);
   } catch (error) {
     console.error('House GLB failed to load. Keeping procedural fallback. Check the model URL/network/CORS:', HOUSE_MODEL_URLS[Math.abs(style) % HOUSE_MODEL_URLS.length], error);
   }
+}
+
+function createLowDetailHouse(width, depth, wallHeight, style) {
+  const low = new THREE.Group();
+  const wall = new THREE.Mesh(
+    new THREE.BoxGeometry(width, wallHeight * 0.88, depth),
+    wallMaterials[style % wallMaterials.length]
+  );
+  wall.position.y = wallHeight * 0.44;
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(Math.max(width, depth) * 0.68, 2.2, 4),
+    roofMaterials[style % roofMaterials.length]
+  );
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = wallHeight + 1.0;
+  low.add(wall, roof);
+  low.traverse(object => {
+    if (object.isMesh) {
+      object.castShadow = false;
+      object.receiveShadow = false;
+    }
+  });
+  return low;
+}
+
+function updateHouseLOD(house) {
+  const distance = Math.hypot(
+    house.position.x - player.position.x,
+    house.position.z - player.position.z
+  );
+  const low = house.userData.lowDetail;
+  const medium = house.userData.mediumDetail;
+  const high = house.userData.highDetail;
+  if (!low || !medium) return;
+
+  const useHigh = house.userData.hasHighDetail && distance < HOUSE_NEAR_DISTANCE;
+  const useMedium = distance >= HOUSE_NEAR_DISTANCE && distance < HOUSE_MID_DISTANCE;
+  low.visible = distance >= HOUSE_MID_DISTANCE;
+  medium.visible = useMedium || (!house.userData.hasHighDetail && distance < HOUSE_MID_DISTANCE);
+  if (high) high.visible = useHigh;
+}
+
+function updateHouseLODs() {
+  for (const house of houseLodRecords) updateHouseLOD(house);
 }
 
 function createHouse(x, z, scale = 1, style = 0) {
@@ -1053,11 +1100,23 @@ function createHouse(x, z, scale = 1, style = 0) {
     house.add(chimney);
   }
 
+  // Preserve the detailed procedural building as the medium-distance model.
+  const mediumDetail = new THREE.Group();
+  while (house.children.length) mediumDetail.add(house.children[0]);
+  house.add(mediumDetail);
+  const lowDetail = createLowDetailHouse(width, depth, wallHeight, style);
+  lowDetail.visible = false;
+  house.add(lowDetail);
+  house.userData.mediumDetail = mediumDetail;
+  house.userData.lowDetail = lowDetail;
+  house.userData.hasHighDetail = false;
+
   house.scale.setScalar(scale);
   house.position.set(x, terrainHeight(x, z), z);
   const houseRotation = (Math.random() - 0.5) * 0.35;
   house.rotation.y = houseRotation;
   scene.add(house);
+  houseLodRecords.push(house);
   // Oriented rectangular footprint closely follows the actual building walls.
   // A small player-radius margin prevents the character clipping the corners.
   const collider = {
@@ -1591,6 +1650,7 @@ function animate() {
   if (clock.elapsedTime >= nextTreeLodUpdate) {
     updateTreeVisibility();
     updateDetailedTreeLODs();
+    updateHouseLODs();
     nextTreeLodUpdate = clock.elapsedTime + 0.55;
   }
 
