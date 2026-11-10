@@ -19,7 +19,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.08;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.querySelector('#game').appendChild(renderer.domElement);
@@ -30,21 +30,22 @@ sky.scale.setScalar(450000);
 scene.add(sky);
 
 const skyUniforms = sky.material.uniforms;
-skyUniforms.turbidity.value = 5.5;
-skyUniforms.rayleigh.value = 2.6;
-skyUniforms.mieCoefficient.value = 0.006;
-skyUniforms.mieDirectionalG.value = 0.82;
+// A clearer atmospheric scattering setup with a warm, low-angle sun.
+skyUniforms.turbidity.value = 7.2;
+skyUniforms.rayleigh.value = 2.1;
+skyUniforms.mieCoefficient.value = 0.0042;
+skyUniforms.mieDirectionalG.value = 0.78;
 
 const sunDirection = new THREE.Vector3().setFromSphericalCoords(
   1,
-  THREE.MathUtils.degToRad(88),
+  THREE.MathUtils.degToRad(78),
   THREE.MathUtils.degToRad(205)
 );
 skyUniforms.sunPosition.value.copy(sunDirection);
 
-scene.add(new THREE.HemisphereLight(0xdceeff, 0x526044, 1.48));
+scene.add(new THREE.HemisphereLight(0xe8f3ff, 0x56634a, 1.25));
 
-const sun = new THREE.DirectionalLight(0xffe8c9, 2.3);
+const sun = new THREE.DirectionalLight(0xffedcf, 2.65);
 sun.position.copy(sunDirection).multiplyScalar(120);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
@@ -341,6 +342,35 @@ function createRiverBridge() {
 }
 createRiverBridge();
 
+
+// --- Soft procedural cloud layers -------------------------------------------
+// Low-poly volumetric cloud banks add depth while keeping geometry inexpensive.
+const cloudGroups = [];
+const cloudMaterial = new THREE.MeshStandardMaterial({
+  color: 0xf4f6f4, roughness: 1, metalness: 0,
+  transparent: true, opacity: 0.88, depthWrite: false
+});
+const cloudPuffs = [
+  [0, 0, 0, 8, 3.1, 5],
+  [6, 0.8, 1, 6.5, 2.7, 4.5],
+  [-6, -0.2, -1.5, 6.2, 2.5, 4.2],
+  [2, 1.1, -4, 5.5, 2.3, 4.0]
+];
+for (let i = 0; i < 16; i++) {
+  const cloud = new THREE.Group();
+  const scale = 0.75 + Math.random() * 1.15;
+  for (const [x, y, z, sx, sy, sz] of cloudPuffs) {
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(1, 9, 7), cloudMaterial);
+    puff.position.set(x * scale, y * scale, z * scale);
+    puff.scale.set(sx * scale, sy * scale, sz * scale);
+    cloud.add(puff);
+  }
+  cloud.position.set((Math.random() - 0.5) * 490, 58 + Math.random() * 28, (Math.random() - 0.5) * 490);
+  cloud.userData.drift = 0.45 + Math.random() * 0.5;
+  cloudGroups.push(cloud);
+  scene.add(cloud);
+}
+
 // --- Distant rolling hills ----------------------------------------------------
 const hillMaterial = new THREE.MeshStandardMaterial({
   color: 0x82977b,
@@ -627,6 +657,16 @@ function createHouse(x, z, scale = 1, style = 0) {
   const depth = style % 2 === 0 ? 6.4 : 7.2;
   const wallHeight = style % 3 === 2 ? 5.0 : 4.1;
 
+  // Raised stone foundation and corner posts give each home a finished silhouette.
+  const foundation = new THREE.Mesh(
+    new THREE.BoxGeometry(width + 0.42, 0.48, depth + 0.42),
+    new THREE.MeshStandardMaterial({ color: 0x77766a, roughness: 1 })
+  );
+  foundation.position.y = 0.24;
+  foundation.castShadow = true;
+  foundation.receiveShadow = true;
+  house.add(foundation);
+
   const walls = new THREE.Mesh(
     new THREE.BoxGeometry(width, wallHeight, depth),
     wallMaterial
@@ -682,10 +722,24 @@ function createHouse(x, z, scale = 1, style = 0) {
   house.add(door);
 
   for (const side of [-1, 1]) {
+    const windowX = side * width * 0.29;
+    const windowY = wallHeight * 0.57;
     const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.05, 0.12), windowMaterial);
-    windowMesh.position.set(side * width * 0.29, wallHeight * 0.57, depth / 2 + 0.09);
+    windowMesh.position.set(windowX, windowY, depth / 2 + 0.09);
     house.add(windowMesh);
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xe4d8bd, roughness: 0.9 });
+    for (const [dx, dy, w, h] of [[0, 0.57, 1.42, 0.12], [0, -0.57, 1.42, 0.12], [-0.65, 0, 0.12, 1.2], [0.65, 0, 0.12, 1.2], [0, 0, 0.07, 1.0]]) {
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.16), frameMaterial);
+      frame.position.set(windowX + dx, windowY + dy, depth / 2 + 0.17);
+      house.add(frame);
+    }
   }
+
+  // A shallow doorstep and visible lintel detail make entrances easier to read.
+  const step = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.22, 0.72),
+    new THREE.MeshStandardMaterial({ color: 0x9b927f, roughness: 1 }));
+  step.position.set(0, 0.11, depth / 2 + 0.42);
+  house.add(step);
 
   if (style % 3 === 0) {
     // Covered porch and two support posts.
@@ -919,6 +973,25 @@ function createCar(color) {
     car.add(sideWindow);
   }
 
+  // Mirrors, door handles and side rubbing strips add recognisable car details.
+  const mirrorMaterial = new THREE.MeshStandardMaterial({ color: 0x252d30, roughness: 0.42 });
+  for (const side of [-1, 1]) {
+    const mirrorStem = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.24), chromeMaterial);
+    mirrorStem.position.set(side * 1.02, 1.53, 0.68);
+    car.add(mirrorStem);
+    const mirror = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.28), mirrorMaterial);
+    mirror.position.set(side * 1.1, 1.61, 0.72);
+    car.add(mirror);
+    for (const z of [-0.72, 0.18]) {
+      const handle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.32), chromeMaterial);
+      handle.position.set(side * 0.91, 1.23, z);
+      car.add(handle);
+    }
+    const sideTrim = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.12, 2.65), chromeMaterial);
+    sideTrim.position.set(side * 1.13, 0.78, -0.12);
+    car.add(sideTrim);
+  }
+
   const wheels = [];
   for (const x of [-1.13, 1.13]) {
     for (const z of [-1.38, 1.38]) {
@@ -941,6 +1014,11 @@ function createCar(color) {
   const grille = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.24, 0.06), new THREE.MeshStandardMaterial({ color: 0x20282b, roughness: 0.95 }));
   grille.position.set(0, 0.83, 2.2);
   car.add(grille);
+  for (let i = 0; i < 4; i++) {
+    const slat = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.025, 0.035), chromeMaterial);
+    slat.position.set(0, 0.75 + i * 0.055, 2.24);
+    car.add(slat);
+  }
   const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.16, 0.14), chromeMaterial);
   rearBumper.position.set(0, 0.55, -2.2);
   car.add(rearBumper);
@@ -999,6 +1077,13 @@ function addPart(parent, geometry, material, position) {
 addPart(character, new THREE.CapsuleGeometry(0.39, 0.62, 4, 8), jacket, [0, 1.32, 0]);
 addPart(character, new THREE.CylinderGeometry(0.12, 0.13, 0.18, 8), skin, [0, 1.86, 0]);
 addPart(character, new THREE.SphereGeometry(0.29, 14, 12), skin, [0, 2.13, 0]);
+// Small facial features and a cap brim make the player model less mannequin-like.
+const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0x202326, roughness: 0.6 });
+for (const side of [-1, 1]) {
+  addPart(character, new THREE.SphereGeometry(0.035, 8, 6), eyeMaterial, [side * 0.105, 2.16, 0.267]);
+}
+addPart(character, new THREE.SphereGeometry(0.045, 8, 6), skin, [0, 2.08, 0.29]);
+addPart(character, new THREE.BoxGeometry(0.36, 0.055, 0.18), dark, [0, 2.19, 0.25]);
 addPart(
   character,
   new THREE.SphereGeometry(0.30, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.48),
@@ -1186,6 +1271,12 @@ function animate() {
   cameraTarget.copy(player.position).add(rotatedOffset);
   camera.position.lerp(cameraTarget, 1 - Math.pow(0.0005, dt));
   camera.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
+
+  // Clouds drift slowly across the sky to create a living horizon.
+  for (const cloud of cloudGroups) {
+    cloud.position.x += cloud.userData.drift * dt;
+    if (cloud.position.x > 270) cloud.position.x = -270;
+  }
 
   // Let village residents stroll around the village paths.
   for (const villager of villagers) {
