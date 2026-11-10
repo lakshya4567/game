@@ -142,7 +142,7 @@ function createRoad() {
   for (const side of [-1, 1]) {
     const points = [];
     for (let i = 0; i <= segments; i++) {
-      const z = -155 + (310 * i / segments);
+      const z = -250 + (500 * i / segments);
       const x = roadCenterX(z) + side * (halfWidth - 0.22);
       points.push(new THREE.Vector3(x, terrainHeight(x, z) + 0.16, z));
     }
