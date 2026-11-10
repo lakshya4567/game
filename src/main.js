@@ -461,6 +461,36 @@ const treeDummy = new THREE.Object3D();
 const reservedVillageZones = [
   { x: -42, z: -76 }, { x: 112, z: 82 }, { x: -96, z: 42 }
 ];
+
+// Keep forest placement clear of every dirt lane, not just the two main roads.
+// Sample the same curved paths used to build the village lanes.
+const villageLanePaths = [
+  [[-42, -53], [-24.4, -50], [roadCenterX(-75) - 3, -75], [roadCenterX(-75), -75]],
+  [[112, 105], [120, 18], [116, Math.sin(112 * 0.014) * 5 - 18], [112, Math.sin(112 * 0.014) * 5 - 28]],
+  [[-96, 19], [-55.68, 22], [roadCenterX(43) - 3, 43], [roadCenterX(43), 43]]
+].map(points => new THREE.CatmullRomCurve3(points.map(([px, pz]) => new THREE.Vector3(px, 0, pz))));
+
+function distanceToSegment2D(px, pz, ax, az, bx, bz) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const lengthSq = dx * dx + dz * dz;
+  const t = lengthSq > 0
+    ? THREE.MathUtils.clamp(((px - ax) * dx + (pz - az) * dz) / lengthSq, 0, 1)
+    : 0;
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
+}
+
+function nearVillageLane(x, z, clearance = 9.5) {
+  for (const curve of villageLanePaths) {
+    let previous = curve.getPoint(0);
+    for (let i = 1; i <= 48; i++) {
+      const next = curve.getPoint(i / 48);
+      if (distanceToSegment2D(x, z, previous.x, previous.z, next.x, next.z) < clearance) return true;
+      previous = next;
+    }
+  }
+  return false;
+}
 const speciesCounts = [0, 0, 0];
 let placedTrees = 0;
 let attempts = 0;
@@ -469,10 +499,12 @@ while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 15) {
   attempts++;
   const x = (Math.random() - 0.5) * 480;
   const z = (Math.random() - 0.5) * 480;
-  if (Math.abs(x - roadCenterX(z)) < 11) continue;
-  if (Math.abs(z - (Math.sin(x * 0.014) * 5 - 28)) < 9) continue;
-  if (Math.abs(x - riverCenterX(z)) < 12) continue;
-  if (reservedVillageZones.some(v => Math.hypot(x - v.x, z - v.z) < 36)) continue;
+  // A generous shoulder keeps trunks and overhanging crowns out of road space.
+  if (Math.abs(x - roadCenterX(z)) < 13.5) continue;
+  if (Math.abs(z - (Math.sin(x * 0.014) * 5 - 28)) < 12) continue;
+  if (nearVillageLane(x, z, 10.5)) continue;
+  if (Math.abs(x - riverCenterX(z)) < 13) continue;
+  if (reservedVillageZones.some(v => Math.hypot(x - v.x, z - v.z) < 39)) continue;
 
   // 48% spruce, 34% broadleaf, 18% tall-trunk woodland trees.
   const roll = Math.random();
@@ -495,7 +527,9 @@ while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 15) {
   const trunkRadius = species === 2 ? 0.72 : species === 1 ? 0.58 : 0.46;
 
   // Scale trunk height independently so some trees have visibly long bare trunks.
-  treeDummy.position.set(x, groundY + trunkLength * scale / 2, z);
+  // LatheGeometry starts at local y=0, so its base must sit exactly on the ground.
+  // The old half-height offset lifted every trunk above the terrain.
+  treeDummy.position.set(x, groundY, z);
   treeDummy.rotation.set(0, rotation, 0);
   treeDummy.scale.set(trunkRadius * scale, (trunkLength / 3.2) * scale, trunkRadius * scale);
   treeDummy.updateMatrix();
@@ -859,16 +893,8 @@ function createVillageLane(points, width = 5.8) {
   }
 }
 
-villageGroups.forEach((village, index) => {
-  const startZ = village.z + (village.z < 0 ? 23 : -23);
-  const startX = village.x;
-  if (index === 1) {
-    const crossZ = Math.sin(startX * 0.014) * 5 - 28;
-    createVillageLane([[startX, startZ], [startX + 8, 18], [startX + 4, crossZ + 10], [startX, crossZ]]);
-  } else {
-    const roadX = roadCenterX(startZ);
-    createVillageLane([[startX, startZ], [startX * 0.58, startZ + 3], [roadX - 3, startZ + 1], [roadX, startZ]]);
-  }
+villageLanePaths.forEach(curve => {
+  createVillageLane(curve.points.map(point => [point.x, point.z]));
 });
 villageGroups.forEach((village, groupIndex) => {
   const placements = [
