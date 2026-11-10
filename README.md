@@ -177,3 +177,10 @@ Update this README.md with every future project update, including new features, 
 - Added car side mirrors, door handles, side trim and a layered front grille.
 - Added small facial features and a cap brim to the player character.
 - Kept the scene procedural and avoided large external texture downloads so the game remains practical to run on lower-end integrated graphics.
+
+
+### Forest placement and tree realism update
+- Fixed floating trunks by aligning the base of each tapered trunk mesh directly with the sampled terrain height.
+- Increased tree-free shoulders beside the main road, crossroad, river and village lanes.
+- Added sampled curved-lane exclusion checks so trees cannot spawn in the middle of village roads.
+- Kept the forest instanced and low-poly to preserve performance on lower-end PCs.
