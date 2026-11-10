@@ -82,7 +82,10 @@ Actions tab. The first deployment can take a few minutes.
 - Rebuilt the road as a terrain-following mesh.
 - Improved the procedural character from a simple capsule into a recognisable human-shaped placeholder.
 - Added simple arm and leg movement while walking and running.
-- Added smooth movement acceleration/braking, gradual turning and improved running animation.\n- Added a crossing road, larger layered spruce trees, roadside village clusters and simple moving traffic.\n- Carved a river channel into the terrain and raised the opaque glossy water surface so it remains visible.\n- Kept the added environment procedural and lightweight for modest PCs.
+- Added smooth movement acceleration/braking, gradual turning and improved running animation.
+- Added a crossing road, larger layered spruce trees, roadside village clusters and simple moving traffic.
+- Carved a river channel into the terrain and raised the opaque glossy water surface so it remains visible.
+- Kept the added environment procedural and lightweight for modest PCs.
 
 ## Known limitations
 
@@ -90,7 +93,9 @@ Actions tab. The first deployment can take a few minutes.
 - Character collision with trees, roads and river banks is not implemented yet. The river is currently visual scenery and cannot be crossed as a physics obstacle.
 - The character follows terrain height, but does not yet tilt to match steep slopes.
 - The world is currently a bounded prototype; infinite/chunk-based terrain streaming is not implemented.
-- Trees, houses and cars are stylised procedural models, not photorealistic assets.\n- Cars are decorative traffic and cannot currently be entered or driven.\n- Villages are scenery; doors and buildings are not interactive.
+- Trees, houses and cars are stylised procedural models, not photorealistic assets.
+- Cars are decorative traffic and cannot currently be entered or driven.
+- Villages are scenery; doors and buildings are not interactive.
 
 ## Planned milestones
 
@@ -108,3 +113,13 @@ The project is designed to start lightweight. Keep texture sizes and shadow qual
 ## Development rule
 
 Update this README.md with every future project update, including new features, changed controls, setup changes and known limitations.
+
+
+## Latest environment scale update
+
+- Increased spruce height and crown size while keeping tree placement away from roads and the river.
+- Enlarged homes and adjusted their proportions relative to the player character; homes now read as buildings several times taller than the character.
+- Added multiple architectural silhouettes, wall colours, roof types, porches, chimneys and two-storey homes.
+- Added simple villagers with strolling animation around all three village clusters.
+- Refined cars with more recognisable body sections, glass, grille, bumpers, lighting and wheel hubs.
+- Raised the river water plane within the carved channel so the blue water is visible above the river bed.
