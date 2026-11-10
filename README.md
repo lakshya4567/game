@@ -209,3 +209,14 @@ The original selected assets are published as CC0 by their providers. The files 
 - `adobe-house.glb` — additional house model supplied for this project.
 
 The tree models are real GLB geometry, but the oak's detailed leaf mesh and the full house assets can still be demanding on older integrated graphics. The near/far tree split limits how many detailed tree instances are active at once; actual frame rate still needs testing on the target PC. House styles cycle across all four local models, including the adobe house.
+
+## Latest character scale and performance update
+
+- Reduced the player character to 82% of its previous size so it looks more proportionate beside village buildings.
+- Enlarged village placements and increased the fit area for all four GLB house models; house collision bounds continue to follow the scaled model dimensions.
+- Added camera-frustum and distance checks for individual forest proxy instances so trees outside the view or beyond the local render range are hidden.
+- Reduced the forest target from 5,600 to 2,800 trees, nearby detailed GLB tree instances from 30 to 7 per species, and their detail distance from 76 to 48 world units.
+- Reduced grass and undergrowth counts, cloud and hill counts, and disabled real-time shadow maps for better performance on older integrated graphics.
+- Reduced the renderer pixel-ratio cap to 1.0 and removed per-frame river normal recalculation.
+- Kept ordinary Three.js object frustum culling enabled; visible terrain, roads and landmarks remain in the scene.
+- Performance still needs to be checked on the target PC. These changes trade some distant scenery detail for smoother gameplay.
