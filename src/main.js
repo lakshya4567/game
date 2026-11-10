@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Sky } from 'three/addons/objects/Sky.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import './style.css';
 
 // A performance-conscious Three.js open-world prototype.
@@ -23,6 +24,15 @@ renderer.toneMappingExposure = 1.08;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.querySelector('#game').appendChild(renderer.domElement);
+
+// External CC0 GLB assets are loaded once and cached. Procedural fallbacks remain
+// in the scene if a model host is offline or blocks a cross-origin request.
+const gltfLoader = new GLTFLoader();
+const gltfPromises = new Map();
+function loadGLTF(url) {
+  if (!gltfPromises.has(url)) gltfPromises.set(url, gltfLoader.loadAsync(url));
+  return gltfPromises.get(url);
+}
 
 // --- Atmosphere and sunlight -------------------------------------------------
 const sky = new Sky();
@@ -493,6 +503,7 @@ function nearVillageLane(x, z, clearance = 9.5) {
   return false;
 }
 const speciesCounts = [0, 0, 0];
+const treeRecords = [];
 let placedTrees = 0;
 let attempts = 0;
 
@@ -585,6 +596,12 @@ while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 15) {
     x, z,
     radius: Math.max(0.62, trunkRadius * scale + 0.42)
   });
+  treeRecords.push({
+    x, z, groundY, rotation, species, index,
+    modelScale: 0.82 + Math.random() * 0.34,
+    proxyRefs: [],
+    modelHidden: false
+  });
   placedTrees++;
 }
 
@@ -600,6 +617,148 @@ allTreeMeshes.forEach(mesh => {
   if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   scene.add(mesh);
 });
+
+// --- Real tree models with near/far LOD --------------------------------------
+// The original instanced trees remain the inexpensive distant LOD. Up close,
+// a small pool of real GLB trees is instanced and the matching proxy is hidden.
+const TREE_MODEL_URLS = [
+  'https://files.innerscene.com/library/mature-norway-spruce-tree-48c2566f/a285b3017c941e802efc/mature-norway-spruce-tree.glb',
+  'https://files.innerscene.com/library/oak-street-tree-detailed-leaves-a273fef9/4a26d0fea7474835bf61/oak-detailed.glb',
+  'https://files.innerscene.com/library/mature-silver-birch-tree-8e297753/aa07a142ddd1cb8e3cfc/mature-silver-birch-tree.glb'
+];
+const TREE_MODEL_HEIGHTS = [15.5, 8.5, 13.5];
+const TREE_MODEL_POOL_SIZE = 30;
+const TREE_MODEL_DISTANCE = 76;
+const detailedTreeAssets = new Map();
+const zeroTreeMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
+
+function getTreeProxyRefs(record) {
+  if (record.species === 0) {
+    return [spruceTrunks, ...spruceCrowns].map(mesh => ({ mesh, index: record.index }));
+  }
+  if (record.species === 1) {
+    return [
+      { mesh: broadleafTrunks, index: record.index },
+      { mesh: broadleafCrown, index: record.index },
+      ...[0, 1, 2].map(offset => ({ mesh: broadleafClusters, index: record.index * 3 + offset }))
+    ];
+  }
+  return [
+    { mesh: tallTrunks, index: record.index },
+    { mesh: tallCrown, index: record.index }
+  ];
+}
+
+for (const record of treeRecords) {
+  record.proxyRefs = getTreeProxyRefs(record).map(ref => ({
+    ...ref,
+    original: ref.mesh.instanceMatrix.array.slice(ref.index * 16, ref.index * 16 + 16)
+  }));
+}
+
+function setTreeProxyHidden(record, hidden) {
+  if (record.modelHidden === hidden) return;
+  const matrix = new THREE.Matrix4();
+  for (const ref of record.proxyRefs) {
+    if (hidden) {
+      ref.mesh.setMatrixAt(ref.index, zeroTreeMatrix);
+    } else {
+      matrix.fromArray(ref.original);
+      ref.mesh.setMatrixAt(ref.index, matrix);
+    }
+    ref.mesh.instanceMatrix.needsUpdate = true;
+  }
+  record.modelHidden = hidden;
+}
+
+async function loadDetailedTreeAsset(species, url, targetHeight) {
+  try {
+    const gltf = await loadGLTF(url);
+    const root = gltf.scene;
+    root.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(root);
+    const size = bounds.getSize(new THREE.Vector3());
+    if (!Number.isFinite(size.y) || size.y <= 0) throw new Error('Tree model has invalid dimensions');
+
+    const center = bounds.getCenter(new THREE.Vector3());
+    const fitScale = targetHeight / size.y;
+    const normalize = new THREE.Matrix4().makeTranslation(-center.x, -bounds.min.y, -center.z);
+    normalize.premultiply(new THREE.Matrix4().makeScale(fitScale, fitScale, fitScale));
+    const meshes = [];
+
+    root.traverse(child => {
+      if (!child.isMesh || !child.geometry || !child.material) return;
+      const geometry = child.geometry.clone();
+      geometry.applyMatrix4(child.matrixWorld);
+      geometry.applyMatrix4(normalize);
+      geometry.computeBoundingSphere();
+      const instanced = new THREE.InstancedMesh(
+        geometry,
+        child.material,
+        TREE_MODEL_POOL_SIZE
+      );
+      instanced.count = 0;
+      instanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      instanced.castShadow = false;
+      instanced.receiveShadow = false;
+      instanced.frustumCulled = false;
+      scene.add(instanced);
+      meshes.push(instanced);
+    });
+
+    if (!meshes.length) throw new Error('Tree GLB contains no mesh objects');
+    detailedTreeAssets.set(species, { meshes, active: [] });
+  } catch (error) {
+    console.warn('Tree GLB could not be loaded; keeping its lightweight forest proxies.', error);
+  }
+}
+
+Promise.all(TREE_MODEL_URLS.map((url, species) =>
+  loadDetailedTreeAsset(species, url, TREE_MODEL_HEIGHTS[species])
+)).then(() => {
+  updateDetailedTreeLODs();
+});
+
+let nextTreeLodUpdate = 0;
+function updateDetailedTreeLODs() {
+  const playerX = player.position.x;
+  const playerZ = player.position.z;
+  for (const [species, asset] of detailedTreeAssets) {
+    const candidates = treeRecords
+      .filter(record => record.species === species)
+      .map(record => ({
+        record,
+        distanceSq: (record.x - playerX) ** 2 + (record.z - playerZ) ** 2
+      }))
+      .filter(item => item.distanceSq < TREE_MODEL_DISTANCE * TREE_MODEL_DISTANCE)
+      .sort((a, b) => a.distanceSq - b.distanceSq)
+      .slice(0, TREE_MODEL_POOL_SIZE)
+      .map(item => item.record);
+
+    const selected = new Set(candidates);
+    for (const previous of asset.active) {
+      if (!selected.has(previous)) setTreeProxyHidden(previous, false);
+    }
+    const dummy = new THREE.Object3D();
+    candidates.forEach((record, index) => {
+      setTreeProxyHidden(record, true);
+      dummy.position.set(record.x, record.groundY, record.z);
+      dummy.rotation.set(0, record.rotation, 0);
+      dummy.scale.setScalar(record.modelScale);
+      dummy.updateMatrix();
+      for (const mesh of asset.meshes) mesh.setMatrixAt(index, dummy.matrix);
+    });
+    for (const mesh of asset.meshes) {
+      mesh.count = candidates.length;
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    asset.active = candidates;
+  }
+}
+
+// Load the three approved tree species. The procedural instances above remain
+// visible until each corresponding real model has loaded successfully.
+
 // Instanced grass keeps draw calls low.
 const grassGeometry = new THREE.ConeGeometry(0.13, 0.65, 4);
 const grassMaterial = new THREE.MeshStandardMaterial({
@@ -691,6 +850,53 @@ const doorMaterials = [
 ];
 
 const houseColliders = [];
+const HOUSE_MODEL_URLS = [
+  'https://grab3d.com/dl/bungalow/bungalow.glb',
+  'https://grab3d.com/dl/stone-house/stone-house.glb',
+  'https://grab3d.com/dl/modern-house/modern-house.glb'
+];
+
+async function replaceHouseWithGLB(house, style, collider, width, depth, wallHeight, outerScale) {
+  try {
+    const gltf = await loadGLTF(HOUSE_MODEL_URLS[Math.abs(style) % HOUSE_MODEL_URLS.length]);
+    const model = gltf.scene.clone(true);
+    model.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(model);
+    const size = bounds.getSize(new THREE.Vector3());
+    if (!Number.isFinite(size.y) || size.y <= 0) throw new Error('House model has invalid dimensions');
+
+    // Fit each downloaded model inside the existing village footprint.
+    const targetHeight = wallHeight + 2.8;
+    const fitScale = Math.min(
+      (width * 1.25) / size.x,
+      (depth * 1.25) / size.z,
+      targetHeight / size.y
+    );
+    const center = bounds.getCenter(new THREE.Vector3());
+    model.scale.setScalar(fitScale);
+    model.position.set(-center.x * fitScale, -bounds.min.y * fitScale, -center.z * fitScale);
+    model.traverse(child => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    // Remove the procedural placeholder only after the GLB is ready.
+    while (house.children.length) {
+      const child = house.children[0];
+      house.remove(child);
+      child.traverse(object => {
+        if (object.geometry) object.geometry.dispose();
+      });
+    }
+    house.add(model);
+    collider.halfWidth = size.x * fitScale * outerScale / 2 + 0.55;
+    collider.halfDepth = size.z * fitScale * outerScale / 2 + 0.55;
+  } catch (error) {
+    console.warn('House GLB could not be loaded; keeping its procedural fallback.', error);
+  }
+}
 
 function createHouse(x, z, scale = 1, style = 0) {
   const house = new THREE.Group();
@@ -819,11 +1025,13 @@ function createHouse(x, z, scale = 1, style = 0) {
   scene.add(house);
   // Oriented rectangular footprint closely follows the actual building walls.
   // A small player-radius margin prevents the character clipping the corners.
-  houseColliders.push({
+  const collider = {
     x, z, rotation: houseRotation,
     halfWidth: width * scale / 2 + 0.48,
     halfDepth: depth * scale / 2 + 0.48
-  });
+  };
+  houseColliders.push(collider);
+  replaceHouseWithGLB(house, style, collider, width, depth, wallHeight, scale);
 
   const fenceMaterial = new THREE.MeshStandardMaterial({ color: 0x8a7759, roughness: 1 });
   for (const side of [-1, 1]) {
@@ -1342,6 +1550,11 @@ function animate() {
       1
     );
     for (const wheel of vehicle.wheels) wheel.rotation.x -= vehicle.speed * dt / 0.43;
+  }
+
+  if (clock.elapsedTime >= nextTreeLodUpdate) {
+    updateDetailedTreeLODs();
+    nextTreeLodUpdate = clock.elapsedTime + 0.35;
   }
 
   // Gentle, intersecting sine waves animate the river surface without a heavy shader.
