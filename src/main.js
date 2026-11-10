@@ -148,6 +148,85 @@ function createRoad() {
 }
 createRoad();
 
+// A second, shorter road crosses the main route to make the forest feel connected.
+function createCrossRoad() {
+  const segments = 120;
+  const halfWidth = 3.5;
+  const vertices = [];
+  const indices = [];
+  for (let i = 0; i <= segments; i++) {
+    const x = -145 + (290 * i / segments);
+    const centerZ = Math.sin(x * 0.014) * 5 - 28;
+    const leftZ = centerZ - halfWidth;
+    const rightZ = centerZ + halfWidth;
+    vertices.push(x, terrainHeight(x, leftZ) + 0.12, leftZ);
+    vertices.push(x, terrainHeight(x, rightZ) + 0.12, rightZ);
+    if (i < segments) {
+      const a = i * 2;
+      indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const road = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+    color: 0x555957, roughness: 0.96, side: THREE.DoubleSide
+  }));
+  road.receiveShadow = true;
+  scene.add(road);
+}
+createCrossRoad();
+
+// A shallow winding river ribbon follows the valley, slightly below the banks.
+function riverCenterX(z) {
+  return 48 + Math.sin(z * 0.019) * 9 + Math.sin(z * 0.043) * 2.5;
+}
+function createRiver() {
+  const segments = 180;
+  const halfWidth = 4.8;
+  const vertices = [];
+  const indices = [];
+  for (let i = 0; i <= segments; i++) {
+    const z = -155 + 310 * i / segments;
+    const centerX = riverCenterX(z);
+    const leftX = centerX - halfWidth;
+    const rightX = centerX + halfWidth;
+    const waterY = Math.min(terrainHeight(leftX, z), terrainHeight(rightX, z), terrainHeight(centerX, z)) - 0.65;
+    vertices.push(leftX, waterY, z, rightX, waterY, z);
+    if (i < segments) {
+      const a = i * 2;
+      indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const water = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+    color: 0x398fa5, roughness: 0.22, metalness: 0.08,
+    transparent: true, opacity: 0.88, side: THREE.DoubleSide
+  }));
+  water.receiveShadow = true;
+  scene.add(water);
+
+  // Soft sandy/pebbly banks make the water edge readable from a distance.
+  for (const side of [-1, 1]) {
+    const points = [];
+    for (let i = 0; i <= segments; i++) {
+      const z = -155 + 310 * i / segments;
+      const x = riverCenterX(z) + side * (halfWidth + 0.35);
+      points.push(new THREE.Vector3(x, terrainHeight(x, z) + 0.08, z));
+    }
+    const bank = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), segments, 0.42, 4, false),
+      new THREE.MeshStandardMaterial({ color: 0x9a906e, roughness: 1 })
+    );
+    scene.add(bank);
+  }
+}
+createRiver();
+
 // --- Distant rolling hills ----------------------------------------------------
 const hillMaterial = new THREE.MeshStandardMaterial({
   color: 0x82977b,
@@ -177,34 +256,40 @@ const trunkMaterial = new THREE.MeshStandardMaterial({
   color: 0x59402e,
   roughness: 1
 });
-const leafMaterials = [
-  new THREE.MeshStandardMaterial({ color: 0x315b39, roughness: 1 }),
-  new THREE.MeshStandardMaterial({ color: 0x416b43, roughness: 1 }),
-  new THREE.MeshStandardMaterial({ color: 0x52784a, roughness: 1 })
+const spruceMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0x173f35, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x205343, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x2c624b, roughness: 1 })
+];
+const trunkGeometry = new THREE.CylinderGeometry(0.18, 0.28, 3.2, 7);
+const spruceTierGeometry = [
+  new THREE.ConeGeometry(2.25, 4.4, 7),
+  new THREE.ConeGeometry(1.85, 4.0, 7),
+  new THREE.ConeGeometry(1.4, 3.5, 7)
 ];
 
-const trunkGeometry = new THREE.CylinderGeometry(0.16, 0.25, 2.1, 7);
-const crownGeometry = new THREE.ConeGeometry(1.35, 3.5, 7);
-
-for (let i = 0; i < 190; i++) {
-  const x = (Math.random() - 0.5) * 285;
+// Taller layered spruce trees, kept clear of roads and the river corridor.
+for (let i = 0; i < 245; i++) {
+  const x = (Math.random() - 0.5) * 290;
   const z = (Math.random() - 0.5) * 290;
-
-  if (Math.abs(x - roadCenterX(z)) < 8) continue;
+  if (Math.abs(x - roadCenterX(z)) < 9) continue;
+  if (Math.abs(z - (Math.sin(x * 0.014) * 5 - 28)) < 7) continue;
+  if (Math.abs(x - riverCenterX(z)) < 10) continue;
 
   const tree = new THREE.Group();
-
   const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-  trunk.position.y = 1.05;
+  trunk.position.y = 1.6;
   trunk.castShadow = true;
   tree.add(trunk);
 
-  const crown = new THREE.Mesh(crownGeometry, leafMaterials[i % leafMaterials.length]);
-  crown.position.y = 3.05;
-  crown.castShadow = true;
-  tree.add(crown);
+  for (let tier = 0; tier < 3; tier++) {
+    const crown = new THREE.Mesh(spruceTierGeometry[tier], spruceMaterials[(i + tier) % spruceMaterials.length]);
+    crown.position.y = 3.0 + tier * 1.65;
+    crown.castShadow = true;
+    tree.add(crown);
+  }
 
-  const scale = 0.72 + Math.random() * 0.55;
+  const scale = 0.9 + Math.random() * 0.65;
   tree.scale.setScalar(scale);
   tree.position.set(x, terrainHeight(x, z), z);
   tree.rotation.y = Math.random() * Math.PI * 2;
@@ -331,10 +416,13 @@ renderer.domElement.addEventListener('pointermove', (event) => {
 });
 
 const clock = new THREE.Clock();
-const cameraOffset = new THREE.Vector3(0, 4.8, 8.8);
+const cameraOffset = new THREE.Vector3(0, 5.0, 9.4);
 const cameraTarget = new THREE.Vector3();
 const upAxis = new THREE.Vector3(0, 1, 0);
+const velocity = new THREE.Vector3();
+const desiredVelocity = new THREE.Vector3();
 let walkTime = 0;
+let characterYaw = 0;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -342,39 +430,56 @@ function animate() {
 
   const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
   const right = new THREE.Vector3(forward.z, 0, -forward.x);
-  const direction = new THREE.Vector3();
+  const inputDirection = new THREE.Vector3();
 
-  if (keys.KeyW || keys.ArrowUp) direction.addScaledVector(forward, -1);
-  if (keys.KeyS || keys.ArrowDown) direction.addScaledVector(forward, 1);
-  if (keys.KeyA || keys.ArrowLeft) direction.addScaledVector(right, -1);
-  if (keys.KeyD || keys.ArrowRight) direction.addScaledVector(right, 1);
+  if (keys.KeyW || keys.ArrowUp) inputDirection.addScaledVector(forward, -1);
+  if (keys.KeyS || keys.ArrowDown) inputDirection.addScaledVector(forward, 1);
+  if (keys.KeyA || keys.ArrowLeft) inputDirection.addScaledVector(right, -1);
+  if (keys.KeyD || keys.ArrowRight) inputDirection.addScaledVector(right, 1);
 
-  let moving = false;
-  if (direction.lengthSq() > 0) {
-    moving = true;
-    direction.normalize();
-    const running = keys.ShiftLeft || keys.ShiftRight;
-    const speed = running ? 10.5 : 5.5;
-    player.position.addScaledVector(direction, speed * dt);
-    player.rotation.y = Math.atan2(direction.x, direction.z);
-    walkTime += dt * (running ? 12 : 8);
+  const running = keys.ShiftLeft || keys.ShiftRight;
+  const maxSpeed = running ? 12.5 : 6.2;
+  if (inputDirection.lengthSq() > 0) {
+    inputDirection.normalize();
+    desiredVelocity.copy(inputDirection).multiplyScalar(maxSpeed);
+  } else {
+    desiredVelocity.set(0, 0, 0);
   }
+
+  // Smooth acceleration and braking instead of instantly changing position.
+  const response = inputDirection.lengthSq() > 0 ? 7.5 : 10.5;
+  velocity.lerp(desiredVelocity, 1 - Math.exp(-response * dt));
+  player.position.addScaledVector(velocity, dt);
 
   player.position.x = THREE.MathUtils.clamp(player.position.x, -150, 150);
   player.position.z = THREE.MathUtils.clamp(player.position.z, -150, 150);
   player.position.y = terrainHeight(player.position.x, player.position.z);
 
-  const swing = moving ? Math.sin(walkTime) * 0.48 : 0;
+  const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
+  const moving = horizontalSpeed > 0.35;
+  if (moving) {
+    const targetYaw = Math.atan2(velocity.x, velocity.z);
+    const angleDifference = Math.atan2(
+      Math.sin(targetYaw - characterYaw),
+      Math.cos(targetYaw - characterYaw)
+    );
+    characterYaw += angleDifference * (1 - Math.exp(-12 * dt));
+    player.rotation.y = characterYaw;
+    walkTime += dt * (running ? 14 : 9);
+  }
+
+  const stride = THREE.MathUtils.clamp(horizontalSpeed / 7, 0, 1);
+  const swing = moving ? Math.sin(walkTime) * 0.62 * stride : 0;
   leftLeg.rotation.x = swing;
   rightLeg.rotation.x = -swing;
-  leftArm.rotation.x = -swing * 0.7;
-  rightArm.rotation.x = swing * 0.7;
-  character.position.y = moving ? Math.abs(Math.sin(walkTime * 2)) * 0.045 : 0;
+  leftArm.rotation.x = -swing * 0.72;
+  rightArm.rotation.x = swing * 0.72;
+  character.position.y = moving ? Math.abs(Math.sin(walkTime * 2)) * 0.065 * stride : 0;
 
   const rotatedOffset = cameraOffset.clone().applyAxisAngle(upAxis, yaw);
   cameraTarget.copy(player.position).add(rotatedOffset);
-  camera.position.lerp(cameraTarget, 1 - Math.pow(0.001, dt));
-  camera.lookAt(player.position.x, player.position.y + 1.45, player.position.z);
+  camera.position.lerp(cameraTarget, 1 - Math.pow(0.0005, dt));
+  camera.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
 
   renderer.render(scene, camera);
 }
