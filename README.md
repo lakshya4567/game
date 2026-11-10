@@ -123,3 +123,13 @@ Update this README.md with every future project update, including new features, 
 - Added simple villagers with strolling animation around all three village clusters.
 - Refined cars with more recognisable body sections, glass, grille, bumpers, lighting and wheel hubs.
 - Raised the river water plane within the carved channel so the blue water is visible above the river bed.
+
+
+## Latest world and collision update
+
+- Expanded the terrain, roads, river, forest distribution and playable boundaries to a 520 × 520 world.
+- Increased the camera far plane and adjusted fog and shadow coverage for the larger map.
+- Added conservative house-footprint collision so the player cannot walk through building walls or corners; movement can slide along a wall.
+- Moved the eastern village farther from the river bend so its houses are not placed in the water.
+- Added gentle animated surface waves to the river using lightweight vertex movement.
+- The river is still scenery: water does not yet have swimming, buoyancy or crossing physics.
