@@ -156,3 +156,12 @@ Update this README.md with every future project update, including new features, 
 - Added subtle vertex-colour variation across the meadow to avoid one flat green ground colour.
 - Refined sky and sunlight settings for a softer, warmer outdoor appearance.
 - Tree shadows remain disabled to keep the dense forest more manageable on older integrated graphics.
+
+
+## Latest village roads, bridge and forest-floor update
+
+- Added small-trunk trees to a portion of the woodland so the forest has more low-branching silhouettes alongside tall bare-trunk trees.
+- Built a timber road bridge with an arched deck, railings, posts and stone supports over the river where the crossroad passes.
+- Added separate dirt-and-gravel access lanes connecting all three villages to the main road network; the eastern village lane joins the crossroad on the far riverbank.
+- Expanded forest-floor variety with instanced shrubs, leafy bushes, fern-like plants and small flower patches in several colours.
+- Kept the new vegetation instanced and lightweight, with clear areas around roads, riverbanks and village clusters.
