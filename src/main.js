@@ -604,7 +604,7 @@ function createCar(color) {
   const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(2.28, 0.18, 0.16), chromeMaterial);
   frontBumper.position.set(0, 0.55, 2.2);
   car.add(frontBumper);
-  const grille = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.24, 0.06), dark);
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.24, 0.06), new THREE.MeshStandardMaterial({ color: 0x20282b, roughness: 0.95 }));
   grille.position.set(0, 0.83, 2.2);
   car.add(grille);
   const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.16, 0.14), chromeMaterial);
