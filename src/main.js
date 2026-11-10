@@ -634,6 +634,9 @@ const TREE_MODEL_URLS = [
 const TREE_MODEL_HEIGHTS = [15.5, 8.5, 13.5];
 const TREE_MODEL_POOL_SIZE = 7;
 const TREE_MODEL_DISTANCE = 48;
+// Define far-tree distances before deriving the shared culling distance.
+const FAR_TREE_DISTANCE = 118;
+const FAR_TREE_CULL_DISTANCE = 260;
 const TREE_CULL_DISTANCE = FAR_TREE_CULL_DISTANCE;
 const cameraFrustum = new THREE.Frustum();
 const cameraViewProjection = new THREE.Matrix4();
@@ -661,8 +664,6 @@ function getTreeProxyRefs(record) {
 // Far-distance forest LOD: one simple trunk and one low-poly crown per tree.
 // The current multi-cluster procedural trees remain the medium LOD; the GLBs
 // remain reserved for close views.
-const FAR_TREE_DISTANCE = 118;
-const FAR_TREE_CULL_DISTANCE = 260;
 const farTreeMeshes = [];
 const farTreeGeometry = [
   new THREE.ConeGeometry(2.0, 7.0, 5),
