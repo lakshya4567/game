@@ -248,3 +248,9 @@ The tree models are real GLB geometry, but the oak's detailed leaf mesh and the 
 ## World startup initialization fix
 
 - Moved the player group declaration ahead of asynchronous tree and house model loading so LOD callbacks cannot access the player binding before initialization.
+
+
+## Tree LOD startup fix
+
+- Fixed a JavaScript temporal-dead-zone error by declaring the far-tree distance constants before deriving the shared tree-culling distance.
+- This prevents the world module from failing during startup before the loading screen can finish.
