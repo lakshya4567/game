@@ -58,13 +58,21 @@ sun.shadow.bias = -0.00025;
 scene.add(sun);
 
 // --- Shared procedural terrain ------------------------------------------------
-function terrainHeight(x, z) {
+function baseTerrainHeight(x, z) {
   return (
     Math.sin(x * 0.030) * 1.45 +
     Math.cos(z * 0.026) * 1.25 +
     Math.sin((x + z) * 0.017) * 1.7 +
     Math.cos((x - z) * 0.012) * 0.65
   );
+}
+
+// Carve a shallow valley into the landscape so the river surface stays visible.
+function terrainHeight(x, z) {
+  const distanceFromRiver = Math.abs(x - riverCenterX(z));
+  const channel = THREE.MathUtils.clamp(1 - distanceFromRiver / 10, 0, 1);
+  const smoothChannel = channel * channel * (3 - 2 * channel);
+  return baseTerrainHeight(x, z) - smoothChannel * 2.15;
 }
 
 const terrainGeometry = new THREE.PlaneGeometry(320, 320, 120, 120);
@@ -192,7 +200,8 @@ function createRiver() {
     const centerX = riverCenterX(z);
     const leftX = centerX - halfWidth;
     const rightX = centerX + halfWidth;
-    const waterY = Math.min(terrainHeight(leftX, z), terrainHeight(rightX, z), terrainHeight(centerX, z)) - 0.65;
+    // Keep the water just above the carved river bed and below its banks.
+    const waterY = baseTerrainHeight(centerX, z) - 0.78;
     vertices.push(leftX, waterY, z, rightX, waterY, z);
     if (i < segments) {
       const a = i * 2;
@@ -203,10 +212,16 @@ function createRiver() {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
   geometry.setIndex(indices);
   geometry.computeVertexNormals();
-  const water = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
-    color: 0x398fa5, roughness: 0.22, metalness: 0.08,
-    transparent: true, opacity: 0.88, side: THREE.DoubleSide
+  const water = new THREE.Mesh(geometry, new THREE.MeshPhysicalMaterial({
+    color: 0x087fae,
+    roughness: 0.12,
+    metalness: 0.02,
+    clearcoat: 0.9,
+    clearcoatRoughness: 0.08,
+    transparent: false,
+    side: THREE.DoubleSide
   }));
+  water.renderOrder = 2;
   water.receiveShadow = true;
   scene.add(water);
 
@@ -215,8 +230,8 @@ function createRiver() {
     const points = [];
     for (let i = 0; i <= segments; i++) {
       const z = -155 + 310 * i / segments;
-      const x = riverCenterX(z) + side * (halfWidth + 0.35);
-      points.push(new THREE.Vector3(x, terrainHeight(x, z) + 0.08, z));
+      const x = riverCenterX(z) + side * 9.7;
+      points.push(new THREE.Vector3(x, baseTerrainHeight(x, z) - 0.02, z));
     }
     const bank = new THREE.Mesh(
       new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), segments, 0.42, 4, false),
@@ -318,8 +333,132 @@ for (let i = 0; i < 600; i++) {
   grassDummy.updateMatrix();
   grass.setMatrixAt(grassIndex++, grassDummy.matrix);
 }
+
 grass.count = grassIndex;
 scene.add(grass);
+
+// --- Small roadside villages -------------------------------------------------
+const wallMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0xd6c39c, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0xc8b18a, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0xb8c6b0, roughness: 1 })
+];
+const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x70463a, roughness: 1 });
+const windowMaterial = new THREE.MeshStandardMaterial({
+  color: 0x6d9aa5, roughness: 0.35, metalness: 0.05
+});
+const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x533c2c, roughness: 1 });
+
+function createHouse(x, z, scale = 1, style = 0) {
+  const house = new THREE.Group();
+  const wall = new THREE.Mesh(new THREE.BoxGeometry(5.2, 3.2, 4.4), wallMaterials[style % wallMaterials.length]);
+  wall.position.y = 1.6;
+  wall.castShadow = true;
+  wall.receiveShadow = true;
+  house.add(wall);
+
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(4.1, 2.5, 4), roofMaterial);
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = 4.35;
+  roof.scale.set(1, 1, 0.82);
+  roof.castShadow = true;
+  house.add(roof);
+
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.9, 0.12), doorMaterial);
+  door.position.set(0, 0.95, 2.26);
+  house.add(door);
+
+  for (const side of [-1, 1]) {
+    const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.8, 0.1), windowMaterial);
+    windowMesh.position.set(side * 1.55, 1.95, 2.27);
+    house.add(windowMesh);
+  }
+
+  house.scale.setScalar(scale);
+  house.position.set(x, terrainHeight(x, z), z);
+  house.rotation.y = (Math.random() - 0.5) * 0.35;
+  scene.add(house);
+
+  // A tiny yard fence gives each cluster a village-like silhouette.
+  const fenceMaterial = new THREE.MeshStandardMaterial({ color: 0x8a7759, roughness: 1 });
+  for (const side of [-1, 1]) {
+    const fence = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.75, 8), fenceMaterial);
+    fence.position.set(x + side * 5.2 * scale, terrainHeight(x + side * 5.2 * scale, z), z - 1.2);
+    fence.castShadow = true;
+    scene.add(fence);
+  }
+}
+
+const villageGroups = [
+  { x: -42, z: -76 },
+  { x: 72, z: 82 }
+];
+villageGroups.forEach((village, groupIndex) => {
+  const placements = [
+    [-5, -5, 1.0], [6, -7, 0.86], [-10, 7, 0.9],
+    [7, 6, 1.05], [0, 13, 0.78]
+  ];
+  placements.forEach(([dx, dz, scale], index) => {
+    createHouse(village.x + dx, village.z + dz, scale, groupIndex + index);
+  });
+});
+
+// --- Low-poly cars travelling along the main road ---------------------------
+function createCar(color) {
+  const car = new THREE.Group();
+  const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.12 });
+  const glassMaterial = new THREE.MeshStandardMaterial({
+    color: 0x263d49, roughness: 0.22, metalness: 0.12
+  });
+  const tyreMaterial = new THREE.MeshStandardMaterial({ color: 0x17191a, roughness: 1 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.72, 4.1), bodyMaterial);
+  body.position.y = 0.85;
+  body.castShadow = true;
+  car.add(body);
+
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.9, 2.05), glassMaterial);
+  cabin.position.set(0, 1.55, -0.15);
+  cabin.castShadow = true;
+  car.add(cabin);
+
+  const wheels = [];
+  for (const x of [-1.08, 1.08]) {
+    for (const z of [-1.35, 1.35]) {
+      const wheel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.43, 0.43, 0.25, 10),
+        tyreMaterial
+      );
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(x, 0.48, z);
+      wheel.castShadow = true;
+      car.add(wheel);
+      wheels.push(wheel);
+    }
+  }
+  const headlightMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffe8b0, emissive: 0x665022, roughness: 0.3
+  });
+  for (const x of [-0.7, 0.7]) {
+    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.2, 0.08), headlightMaterial);
+    lamp.position.set(x, 0.95, 2.08);
+    car.add(lamp);
+  }
+  return { car, wheels };
+}
+
+const traffic = [];
+[0xffbd55, 0xd94d43, 0x477eae, 0xe2e1d8].forEach((color, index) => {
+  const vehicle = createCar(color);
+  vehicle.car.scale.setScalar(0.92);
+  scene.add(vehicle.car);
+  traffic.push({
+    ...vehicle,
+    z: -118 + index * 62,
+    speed: 5.5 + index * 0.8,
+    lane: index % 2 === 0 ? -1.35 : 1.35
+  });
+});
+
 
 // --- Procedural third-person character ---------------------------------------
 // This is a lightweight placeholder model. A rigged GLB character can replace
@@ -480,6 +619,19 @@ function animate() {
   cameraTarget.copy(player.position).add(rotatedOffset);
   camera.position.lerp(cameraTarget, 1 - Math.pow(0.0005, dt));
   camera.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
+
+  // Move simple traffic along the winding main road.
+  for (const vehicle of traffic) {
+    vehicle.z += vehicle.speed * dt;
+    if (vehicle.z > 158) vehicle.z = -158;
+    const x = roadCenterX(vehicle.z) + vehicle.lane;
+    vehicle.car.position.set(x, terrainHeight(x, vehicle.z) + 0.03, vehicle.z);
+    vehicle.car.rotation.y = -Math.atan2(
+      (roadCenterX(vehicle.z + 0.5) - roadCenterX(vehicle.z - 0.5)),
+      1
+    );
+    for (const wheel of vehicle.wheels) wheel.rotation.x -= vehicle.speed * dt / 0.43;
+  }
 
   renderer.render(scene, camera);
 }
