@@ -306,21 +306,15 @@ const oakClusterGeometry = new THREE.SphereGeometry(1.55, 7, 6);
 const spruceTrunks = new THREE.InstancedMesh(standardTrunkGeometry, treeTrunkMaterial, TREE_COUNT);
 const broadleafTrunks = new THREE.InstancedMesh(standardTrunkGeometry, treeTrunkMaterial, TREE_COUNT);
 const tallTrunks = new THREE.InstancedMesh(standardTrunkGeometry, treeTrunkMaterial, TREE_COUNT);
-const spruceCrowns = spruceCrownGeometries.map((geometry, tier) =>
-  new THREE.InstancedMesh(geometry, spruceLeafMaterials[tier], TREE_COUNT)
+const spruceCrowns = spruceCrownGeometries.map(geometry =>
+  new THREE.InstancedMesh(geometry, spruceLeafMaterials[0], TREE_COUNT)
 );
-const broadleafCrowns = broadleafMaterials.map(material =>
-  new THREE.InstancedMesh(broadleafCrownGeometry, material, TREE_COUNT)
-);
-const broadleafClusters = broadleafMaterials.map(material =>
-  new THREE.InstancedMesh(oakClusterGeometry, material, TREE_COUNT)
-);
-const tallCrowns = tallTreeMaterials.map(material =>
-  new THREE.InstancedMesh(tallCrownGeometry, material, TREE_COUNT)
-);
+const broadleafCrown = new THREE.InstancedMesh(broadleafCrownGeometry, broadleafMaterials[0], TREE_COUNT);
+const broadleafClusters = new THREE.InstancedMesh(oakClusterGeometry, broadleafMaterials[0], TREE_COUNT * 3);
+const tallCrown = new THREE.InstancedMesh(tallCrownGeometry, tallTreeMaterials[0], TREE_COUNT);
 const allTreeMeshes = [
   spruceTrunks, broadleafTrunks, tallTrunks,
-  ...spruceCrowns, ...broadleafCrowns, ...broadleafClusters, ...tallCrowns
+  ...spruceCrowns, broadleafCrown, broadleafClusters, tallCrown
 ];
 allTreeMeshes.forEach(mesh => {
   mesh.castShadow = false;
@@ -376,6 +370,8 @@ while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 15) {
       treeDummy.scale.setScalar(scale);
       treeDummy.updateMatrix();
       spruceCrowns[tier].setMatrixAt(index, treeDummy.matrix);
+      const spruceTint = new THREE.Color([0x174536, 0x245b45, 0x356b4d, 0x456f4d][Math.floor(Math.random() * 4)]);
+      spruceCrowns[tier].setColorAt(index, spruceTint);
     }
   } else if (species === 1) {
     const crownY = groundY + (trunkLength + 1.7) * scale;
@@ -383,7 +379,8 @@ while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 15) {
     treeDummy.rotation.set(0, rotation, 0);
     treeDummy.scale.setScalar(scale * 1.15);
     treeDummy.updateMatrix();
-    broadleafCrowns[index % broadleafCrowns.length].setMatrixAt(index, treeDummy.matrix);
+    broadleafCrown.setMatrixAt(index, treeDummy.matrix);
+    broadleafCrown.setColorAt(index, new THREE.Color([0x527d42, 0x668b49, 0x789653, 0x3e7044][Math.floor(Math.random() * 4)]));
     // Three overlapping leaf clusters make broadleaf crowns less spherical.
     for (let cluster = 0; cluster < 3; cluster++) {
       const angle = rotation + cluster * Math.PI * 2 / 3;
@@ -394,14 +391,16 @@ while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 15) {
       );
       treeDummy.scale.setScalar(scale * 0.78);
       treeDummy.updateMatrix();
-      broadleafClusters[index % broadleafClusters.length].setMatrixAt(index * 3 + cluster, treeDummy.matrix);
+      broadleafClusters.setMatrixAt(index * 3 + cluster, treeDummy.matrix);
+      broadleafClusters.setColorAt(index * 3 + cluster, new THREE.Color([0x527d42, 0x668b49, 0x789653, 0x3e7044][Math.floor(Math.random() * 4)]));
     }
   } else {
     treeDummy.position.set(x, groundY + (trunkLength + 3.4) * scale, z);
     treeDummy.rotation.set(0, rotation, 0);
     treeDummy.scale.set(scale * 1.2, scale * 1.05, scale * 1.2);
     treeDummy.updateMatrix();
-    tallCrowns[index % tallCrowns.length].setMatrixAt(index, treeDummy.matrix);
+    tallCrown.setMatrixAt(index, treeDummy.matrix);
+    tallCrown.setColorAt(index, new THREE.Color([0x315b3d, 0x477348, 0x5c8148][Math.floor(Math.random() * 3)]));
   }
 
   const cellX = Math.floor(x / TREE_CELL_SIZE);
@@ -419,9 +418,9 @@ spruceTrunks.count = speciesCounts[0];
 broadleafTrunks.count = speciesCounts[1];
 tallTrunks.count = speciesCounts[2];
 spruceCrowns.forEach(mesh => { mesh.count = speciesCounts[0]; });
-broadleafCrowns.forEach(mesh => { mesh.count = speciesCounts[1]; });
-broadleafClusters.forEach(mesh => { mesh.count = speciesCounts[1] * 3; });
-tallCrowns.forEach(mesh => { mesh.count = speciesCounts[2]; });
+broadleafCrown.count = speciesCounts[1];
+broadleafClusters.count = speciesCounts[1] * 3;
+tallCrown.count = speciesCounts[2];
 allTreeMeshes.forEach(mesh => {
   mesh.instanceMatrix.needsUpdate = true;
   scene.add(mesh);
