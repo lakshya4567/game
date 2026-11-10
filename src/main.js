@@ -533,11 +533,11 @@ const grassMaterial = new THREE.MeshStandardMaterial({
   color: 0x78965a,
   roughness: 1
 });
-const grass = new THREE.InstancedMesh(grassGeometry, grassMaterial, 600);
+const grass = new THREE.InstancedMesh(grassGeometry, grassMaterial, 2200);
 const grassDummy = new THREE.Object3D();
 let grassIndex = 0;
 
-for (let i = 0; i < 600; i++) {
+for (let i = 0; i < 2200; i++) {
   const x = (Math.random() - 0.5) * 480;
   const z = (Math.random() - 0.5) * 480;
   if (Math.abs(x - roadCenterX(z)) < 6) continue;
@@ -547,7 +547,9 @@ for (let i = 0; i < 600; i++) {
   const scale = 0.5 + Math.random() * 0.8;
   grassDummy.scale.set(scale, scale, scale);
   grassDummy.updateMatrix();
-  grass.setMatrixAt(grassIndex++, grassDummy.matrix);
+  grass.setMatrixAt(grassIndex, grassDummy.matrix);
+  grass.setColorAt(grassIndex, new THREE.Color([0x718c4c, 0x8aa45a, 0x607c42, 0x9ba85e][Math.floor(Math.random() * 4)]));
+  grassIndex++;
 }
 
 grass.count = grassIndex;
