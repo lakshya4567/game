@@ -102,3 +102,23 @@ canvas { display: block; }
   }
   .controls { font-size: 10px; }
 }
+
+#speedometer {
+  position: fixed;
+  z-index: 2;
+  right: 26px;
+  bottom: 24px;
+  padding: 12px 17px;
+  border: 1px solid #ffffff42;
+  border-radius: 12px;
+  background: #101c1dcc;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-shadow: 0 2px 8px #000;
+  pointer-events: none;
+}
+@media (max-width: 650px) {
+  #speedometer { right: 14px; bottom: 14px; font-size: 11px; }
+}
