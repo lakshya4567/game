@@ -172,7 +172,8 @@ Update this README.md with every future project update, including new features, 
 
 - Reworked atmospheric scattering with a warmer low-angle sun, clearer blue upper sky, balanced hemisphere fill and slightly refined exposure.
 - Added sixteen softly shaded procedural cloud formations with gentle drift across the horizon.
-- Added house foundations, framed windows, vertical window dividers and front doorsteps to give village homes more architectural detail.
+- Added house foundations, framed windows, vertical window dividers, front doorsteps and small metal door knobs to give village homes more architectural detail.
+- Refined the instanced tree trunks with flared roots and a naturally tapered profile.
 - Added car side mirrors, door handles, side trim and a layered front grille.
 - Added small facial features and a cap brim to the player character.
 - Kept the scene procedural and avoided large external texture downloads so the game remains practical to run on lower-end integrated graphics.
