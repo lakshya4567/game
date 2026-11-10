@@ -133,3 +133,14 @@ Update this README.md with every future project update, including new features, 
 - Moved the eastern village farther from the river bend so its houses are not placed in the water.
 - Added gentle animated surface waves to the river using lightweight vertex movement.
 - The river is still scenery: water does not yet have swimming, buoyancy or crossing physics.
+
+
+## Latest forest and collision update
+
+- Increased the forest target from 245 to 24,500 spruce trees (100×), using four instanced meshes so the trees require only a small number of draw calls.
+- Added a spatial collision grid for tree trunks; movement checks nearby cells rather than scanning every tree.
+- Added tree-trunk collision with smooth axis-based sliding around obstacles.
+- Replaced broad circular house collision with rotated rectangular footprints that more closely match each building's walls and corners.
+- Disabled tree shadow casting for this dense forest to reduce GPU load on lower-end computers.
+- The forest generator keeps trees clear of roads, the river corridor and village areas.
+- Performance may still vary significantly on older integrated graphics; if frame rate is low, reduce the tree count or render distance.
