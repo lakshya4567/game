@@ -166,3 +166,13 @@ Update this README.md with every future project update, including new features, 
 - Expanded meadow grass from 600 to 2,200 instanced blades, with several natural green/yellow-green shades.
 - Expanded forest-floor variety with instanced shrubs, leafy bushes, fern-like plants and small flower patches in several colours.
 - Kept the new vegetation instanced and lightweight, with clear areas around roads, riverbanks and village clusters.
+
+
+## Latest model-detail and sky realism update
+
+- Reworked atmospheric scattering with a warmer low-angle sun, clearer blue upper sky, balanced hemisphere fill and slightly refined exposure.
+- Added sixteen softly shaded procedural cloud formations with gentle drift across the horizon.
+- Added house foundations, framed windows, vertical window dividers and front doorsteps to give village homes more architectural detail.
+- Added car side mirrors, door handles, side trim and a layered front grille.
+- Added small facial features and a cap brim to the player character.
+- Kept the scene procedural and avoided large external texture downloads so the game remains practical to run on lower-end integrated graphics.
