@@ -8,6 +8,8 @@ import './style.css';
 // and player, preventing props from being placed at an unrelated y = 0 level.
 
 const scene = new THREE.Scene();
+// Declare the player group before asynchronous model loaders can finish.
+const player = new THREE.Group();
 scene.background = new THREE.Color(0xb9d7e5);
 scene.fog = new THREE.FogExp2(0xb9d7e5, 0.00145);
 
@@ -1474,7 +1476,6 @@ const traffic = [];
 // --- Procedural third-person character ---------------------------------------
 // This is a lightweight placeholder model. A rigged GLB character can replace
 // it later for professional animation and more detailed clothing.
-const player = new THREE.Group();
 const character = new THREE.Group();
 character.scale.setScalar(0.82);
 player.add(character);
