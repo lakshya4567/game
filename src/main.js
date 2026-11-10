@@ -420,7 +420,15 @@ const tallTreeMaterials = [
   new THREE.MeshStandardMaterial({ color: 0x5c8148, roughness: 1 })
 ];
 
-const standardTrunkGeometry = new THREE.CylinderGeometry(0.2, 0.32, 3.2, 7);
+// A flared, gently tapered trunk silhouette reads more like a real tree than a tube.
+const standardTrunkGeometry = new THREE.LatheGeometry([
+  new THREE.Vector2(0.38, 0.0),
+  new THREE.Vector2(0.31, 0.22),
+  new THREE.Vector2(0.25, 0.85),
+  new THREE.Vector2(0.21, 1.75),
+  new THREE.Vector2(0.17, 2.55),
+  new THREE.Vector2(0.13, 3.2)
+], 8);
 const spruceCrownGeometries = [
   new THREE.ConeGeometry(2.65, 5.0, 7),
   new THREE.ConeGeometry(2.15, 4.5, 7),
@@ -720,6 +728,10 @@ function createHouse(x, z, scale = 1, style = 0) {
   );
   door.position.set(0, 1.17, depth / 2 + 0.08);
   house.add(door);
+  const doorKnob = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6),
+    new THREE.MeshStandardMaterial({ color: 0xc6a65c, metalness: 0.55, roughness: 0.35 }));
+  doorKnob.position.set(0.36, 1.18, depth / 2 + 0.17);
+  house.add(doorKnob);
 
   for (const side of [-1, 1]) {
     const windowX = side * width * 0.29;
