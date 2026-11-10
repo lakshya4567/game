@@ -201,7 +201,7 @@ function createRiver() {
     const leftX = centerX - halfWidth;
     const rightX = centerX + halfWidth;
     // Keep the water just above the carved river bed and below its banks.
-    const waterY = baseTerrainHeight(centerX, z) - 0.78;
+    const waterY = baseTerrainHeight(centerX, z) - 1.42;
     vertices.push(leftX, waterY, z, rightX, waterY, z);
     if (i < segments) {
       const a = i * 2;
@@ -278,9 +278,9 @@ const spruceMaterials = [
 ];
 const trunkGeometry = new THREE.CylinderGeometry(0.18, 0.28, 3.2, 7);
 const spruceTierGeometry = [
-  new THREE.ConeGeometry(2.25, 4.4, 7),
-  new THREE.ConeGeometry(1.85, 4.0, 7),
-  new THREE.ConeGeometry(1.4, 3.5, 7)
+  new THREE.ConeGeometry(2.8, 5.2, 7),
+  new THREE.ConeGeometry(2.25, 4.8, 7),
+  new THREE.ConeGeometry(1.7, 4.2, 7)
 ];
 
 // Taller layered spruce trees, kept clear of roads and the river corridor.
@@ -299,12 +299,12 @@ for (let i = 0; i < 245; i++) {
 
   for (let tier = 0; tier < 3; tier++) {
     const crown = new THREE.Mesh(spruceTierGeometry[tier], spruceMaterials[(i + tier) % spruceMaterials.length]);
-    crown.position.y = 3.0 + tier * 1.65;
+    crown.position.y = 3.4 + tier * 1.9;
     crown.castShadow = true;
     tree.add(crown);
   }
 
-  const scale = 0.9 + Math.random() * 0.65;
+  const scale = 1.35 + Math.random() * 0.65;
   tree.scale.setScalar(scale);
   tree.position.set(x, terrainHeight(x, z), z);
   tree.rotation.y = Math.random() * Math.PI * 2;
@@ -339,39 +339,116 @@ scene.add(grass);
 
 // --- Small roadside villages -------------------------------------------------
 const wallMaterials = [
-  new THREE.MeshStandardMaterial({ color: 0xd6c39c, roughness: 1 }),
-  new THREE.MeshStandardMaterial({ color: 0xc8b18a, roughness: 1 }),
-  new THREE.MeshStandardMaterial({ color: 0xb8c6b0, roughness: 1 })
+  new THREE.MeshStandardMaterial({ color: 0xd9c39c, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0xc6b18f, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0xb9c8b8, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0xd6a98a, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0xb8c5d3, roughness: 1 })
 ];
-const roofMaterial = new THREE.MeshStandardMaterial({ color: 0x70463a, roughness: 1 });
+const roofMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0x70463a, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x4d5354, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x8a5939, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x526c57, roughness: 1 })
+];
 const windowMaterial = new THREE.MeshStandardMaterial({
-  color: 0x6d9aa5, roughness: 0.35, metalness: 0.05
+  color: 0x83b7c6, roughness: 0.3, metalness: 0.05
 });
-const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x533c2c, roughness: 1 });
+const doorMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0x533c2c, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x344b55, roughness: 1 })
+];
 
 function createHouse(x, z, scale = 1, style = 0) {
   const house = new THREE.Group();
-  const wall = new THREE.Mesh(new THREE.BoxGeometry(5.2, 3.2, 4.4), wallMaterials[style % wallMaterials.length]);
-  wall.position.y = 1.6;
-  wall.castShadow = true;
-  wall.receiveShadow = true;
-  house.add(wall);
+  const wallMaterial = wallMaterials[style % wallMaterials.length];
+  const roofMaterial = roofMaterials[style % roofMaterials.length];
+  const width = style % 3 === 0 ? 7.4 : style % 3 === 1 ? 6.3 : 8.2;
+  const depth = style % 2 === 0 ? 6.4 : 7.2;
+  const wallHeight = style % 3 === 2 ? 5.0 : 4.1;
 
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(4.1, 2.5, 4), roofMaterial);
-  roof.rotation.y = Math.PI / 4;
-  roof.position.y = 4.35;
-  roof.scale.set(1, 1, 0.82);
-  roof.castShadow = true;
-  house.add(roof);
+  const walls = new THREE.Mesh(
+    new THREE.BoxGeometry(width, wallHeight, depth),
+    wallMaterial
+  );
+  walls.position.y = wallHeight / 2;
+  walls.castShadow = true;
+  walls.receiveShadow = true;
+  house.add(walls);
 
-  const door = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.9, 0.12), doorMaterial);
-  door.position.set(0, 0.95, 2.26);
+  if (style % 4 === 1) {
+    // A second storey creates a taller two-level village home.
+    const upper = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.76, 2.4, depth * 0.76),
+      wallMaterial
+    );
+    upper.position.set(0, wallHeight + 1.2, -0.15);
+    upper.castShadow = true;
+    house.add(upper);
+  }
+
+  if (style % 4 === 2) {
+    // Flat-roof modern home with a raised parapet.
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(width + 0.65, 0.42, depth + 0.65),
+      roofMaterial
+    );
+    roof.position.y = wallHeight + 0.22;
+    roof.castShadow = true;
+    house.add(roof);
+    const parapet = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.72, 0.7, depth * 0.72),
+      wallMaterial
+    );
+    parapet.position.set(0, wallHeight + 0.72, -0.1);
+    house.add(parapet);
+  } else {
+    const roof = new THREE.Mesh(
+      new THREE.ConeGeometry(width * 0.72, style % 4 === 1 ? 3.4 : 3.0, 4),
+      roofMaterial
+    );
+    roof.rotation.y = Math.PI / 4;
+    roof.position.y = wallHeight + 1.45;
+    roof.scale.set(1, 1, depth / width);
+    roof.castShadow = true;
+    house.add(roof);
+  }
+
+  const door = new THREE.Mesh(
+    new THREE.BoxGeometry(1.15, 2.35, 0.14),
+    doorMaterials[style % doorMaterials.length]
+  );
+  door.position.set(0, 1.17, depth / 2 + 0.08);
   house.add(door);
 
   for (const side of [-1, 1]) {
-    const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.8, 0.1), windowMaterial);
-    windowMesh.position.set(side * 1.55, 1.95, 2.27);
+    const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.05, 0.12), windowMaterial);
+    windowMesh.position.set(side * width * 0.29, wallHeight * 0.57, depth / 2 + 0.09);
     house.add(windowMesh);
+  }
+
+  if (style % 3 === 0) {
+    // Covered porch and two support posts.
+    const porchRoof = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.72, 0.24, 2.0),
+      roofMaterial
+    );
+    porchRoof.position.set(0, 3.0, depth / 2 + 1.0);
+    house.add(porchRoof);
+    for (const side of [-1, 1]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.9, 0.18), doorMaterials[0]);
+      post.position.set(side * width * 0.31, 1.45, depth / 2 + 1.7);
+      house.add(post);
+    }
+  }
+
+  if (style % 3 === 1) {
+    const chimney = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 2.5, 0.8),
+      new THREE.MeshStandardMaterial({ color: 0x80594b, roughness: 1 })
+    );
+    chimney.position.set(width * 0.28, wallHeight + 2.0, -depth * 0.2);
+    house.add(chimney);
   }
 
   house.scale.setScalar(scale);
@@ -379,11 +456,10 @@ function createHouse(x, z, scale = 1, style = 0) {
   house.rotation.y = (Math.random() - 0.5) * 0.35;
   scene.add(house);
 
-  // A tiny yard fence gives each cluster a village-like silhouette.
   const fenceMaterial = new THREE.MeshStandardMaterial({ color: 0x8a7759, roughness: 1 });
   for (const side of [-1, 1]) {
-    const fence = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.75, 8), fenceMaterial);
-    fence.position.set(x + side * 5.2 * scale, terrainHeight(x + side * 5.2 * scale, z), z - 1.2);
+    const fence = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.85, 10 * scale), fenceMaterial);
+    fence.position.set(x + side * (width * 0.72) * scale, terrainHeight(x + side * (width * 0.72) * scale, z), z - 1.5);
     fence.castShadow = true;
     scene.add(fence);
   }
@@ -391,57 +467,160 @@ function createHouse(x, z, scale = 1, style = 0) {
 
 const villageGroups = [
   { x: -42, z: -76 },
-  { x: 72, z: 82 }
+  { x: 72, z: 82 },
+  { x: -96, z: 42 }
 ];
 villageGroups.forEach((village, groupIndex) => {
   const placements = [
-    [-5, -5, 1.0], [6, -7, 0.86], [-10, 7, 0.9],
-    [7, 6, 1.05], [0, 13, 0.78]
+    [-10, -7, 1.18], [10, -9, 1.08], [-13, 9, 1.12],
+    [12, 9, 1.22], [0, 17, 0.96]
   ];
   placements.forEach(([dx, dz, scale], index) => {
     createHouse(village.x + dx, village.z + dz, scale, groupIndex + index);
   });
 });
 
+// --- Village residents --------------------------------------------------------
+const villagers = [];
+const villagerCoats = [
+  new THREE.MeshStandardMaterial({ color: 0x9b5140, roughness: 0.95 }),
+  new THREE.MeshStandardMaterial({ color: 0x3d7180, roughness: 0.95 }),
+  new THREE.MeshStandardMaterial({ color: 0x8b7842, roughness: 0.95 }),
+  new THREE.MeshStandardMaterial({ color: 0x66527f, roughness: 0.95 })
+];
+const villagerSkin = new THREE.MeshStandardMaterial({ color: 0xb98262, roughness: 1 });
+const villagerLegs = new THREE.MeshStandardMaterial({ color: 0x30383a, roughness: 1 });
+
+function createVillager(x, z, index) {
+  const person = new THREE.Group();
+  const coat = villagerCoats[index % villagerCoats.length];
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 0.48, 3, 7), coat);
+  torso.position.y = 1.12;
+  torso.castShadow = true;
+  person.add(torso);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), villagerSkin);
+  head.position.y = 1.78;
+  head.castShadow = true;
+  person.add(head);
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.225, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.48),
+    new THREE.MeshStandardMaterial({ color: index % 2 ? 0x332b27 : 0x514033, roughness: 1 })
+  );
+  hair.position.y = 1.84;
+  person.add(hair);
+
+  const legs = [];
+  for (const side of [-1, 1]) {
+    const leg = new THREE.Group();
+    leg.position.set(side * 0.13, 0.76, 0);
+    const limb = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.48, 3, 6), villagerLegs);
+    limb.position.y = -0.28;
+    limb.castShadow = true;
+    leg.add(limb);
+    person.add(leg);
+    legs.push(leg);
+  }
+  const arms = [];
+  for (const side of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.position.set(side * 0.34, 1.38, 0);
+    const limb = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.4, 3, 6), coat);
+    limb.position.y = -0.25;
+    arm.add(limb);
+    person.add(arm);
+    arms.push(arm);
+  }
+  person.position.set(x, terrainHeight(x, z), z);
+  scene.add(person);
+  villagers.push({ person, legs, arms, originX: x, originZ: z, phase: index * 1.7 });
+}
+
+villageGroups.forEach((village, groupIndex) => {
+  for (let i = 0; i < 3; i++) {
+    createVillager(village.x + (i - 1) * 7, village.z + 22 + (i % 2) * 3, groupIndex * 3 + i);
+  }
+});
+
 // --- Low-poly cars travelling along the main road ---------------------------
 function createCar(color) {
   const car = new THREE.Group();
-  const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.12 });
+  const bodyMaterial = new THREE.MeshStandardMaterial({ color, roughness: 0.48, metalness: 0.18 });
   const glassMaterial = new THREE.MeshStandardMaterial({
-    color: 0x263d49, roughness: 0.22, metalness: 0.12
+    color: 0x18313d, roughness: 0.18, metalness: 0.16
   });
   const tyreMaterial = new THREE.MeshStandardMaterial({ color: 0x17191a, roughness: 1 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(2.15, 0.72, 4.1), bodyMaterial);
-  body.position.y = 0.85;
-  body.castShadow = true;
-  car.add(body);
+  const chromeMaterial = new THREE.MeshStandardMaterial({ color: 0xb8c4c8, metalness: 0.75, roughness: 0.28 });
+  const lampMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffefc2, emissive: 0x8a6528, roughness: 0.25
+  });
 
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.65, 0.9, 2.05), glassMaterial);
-  cabin.position.set(0, 1.55, -0.15);
+  const lowerBody = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.72, 4.35), bodyMaterial);
+  lowerBody.position.y = 0.82;
+  lowerBody.castShadow = true;
+  car.add(lowerBody);
+
+  const hood = new THREE.Mesh(new THREE.BoxGeometry(2.12, 0.3, 1.25), bodyMaterial);
+  hood.position.set(0, 1.16, 1.42);
+  car.add(hood);
+  const boot = new THREE.Mesh(new THREE.BoxGeometry(2.08, 0.28, 0.85), bodyMaterial);
+  boot.position.set(0, 1.13, -1.72);
+  car.add(boot);
+
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.72, 0.92, 2.15), bodyMaterial);
+  cabin.position.set(0, 1.55, -0.22);
   cabin.castShadow = true;
   car.add(cabin);
 
+  const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.55, 0.68, 0.08), glassMaterial);
+  windshield.position.set(0, 1.63, 0.88);
+  windshield.rotation.x = -0.24;
+  car.add(windshield);
+  const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.62, 0.08), glassMaterial);
+  rearGlass.position.set(0, 1.62, -1.28);
+  rearGlass.rotation.x = 0.22;
+  car.add(rearGlass);
+  for (const side of [-1, 1]) {
+    const sideWindow = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.55, 1.35), glassMaterial);
+    sideWindow.position.set(side * 0.87, 1.62, -0.2);
+    car.add(sideWindow);
+  }
+
   const wheels = [];
-  for (const x of [-1.08, 1.08]) {
-    for (const z of [-1.35, 1.35]) {
-      const wheel = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.43, 0.43, 0.25, 10),
-        tyreMaterial
-      );
+  for (const x of [-1.13, 1.13]) {
+    for (const z of [-1.38, 1.38]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.43, 0.43, 0.28, 12), tyreMaterial);
       wheel.rotation.z = Math.PI / 2;
       wheel.position.set(x, 0.48, z);
       wheel.castShadow = true;
       car.add(wheel);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.295, 10), chromeMaterial);
+      hub.rotation.z = Math.PI / 2;
+      hub.position.copy(wheel.position);
+      car.add(hub);
       wheels.push(wheel);
     }
   }
-  const headlightMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffe8b0, emissive: 0x665022, roughness: 0.3
-  });
-  for (const x of [-0.7, 0.7]) {
-    const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.2, 0.08), headlightMaterial);
-    lamp.position.set(x, 0.95, 2.08);
-    car.add(lamp);
+
+  const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(2.28, 0.18, 0.16), chromeMaterial);
+  frontBumper.position.set(0, 0.55, 2.2);
+  car.add(frontBumper);
+  const grille = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.24, 0.06), dark);
+  grille.position.set(0, 0.83, 2.2);
+  car.add(grille);
+  const rearBumper = new THREE.Mesh(new THREE.BoxGeometry(2.25, 0.16, 0.14), chromeMaterial);
+  rearBumper.position.set(0, 0.55, -2.2);
+  car.add(rearBumper);
+
+  for (const x of [-0.76, 0.76]) {
+    const headlight = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.23, 0.08), lampMaterial);
+    headlight.position.set(x, 1.02, 2.2);
+    car.add(headlight);
+    const tailLight = new THREE.Mesh(
+      new THREE.BoxGeometry(0.36, 0.22, 0.08),
+      new THREE.MeshStandardMaterial({ color: 0xc62d27, emissive: 0x3b0907 })
+    );
+    tailLight.position.set(x, 0.98, -2.2);
+    car.add(tailLight);
   }
   return { car, wheels };
 }
@@ -619,6 +798,20 @@ function animate() {
   cameraTarget.copy(player.position).add(rotatedOffset);
   camera.position.lerp(cameraTarget, 1 - Math.pow(0.0005, dt));
   camera.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
+
+  // Let village residents stroll around the village paths.
+  for (const villager of villagers) {
+    const stroll = clock.elapsedTime * 0.28 + villager.phase;
+    const x = villager.originX + Math.sin(stroll) * 2.4;
+    const z = villager.originZ + Math.cos(stroll * 0.7) * 1.8;
+    villager.person.position.set(x, terrainHeight(x, z), z);
+    villager.person.rotation.y = Math.atan2(Math.cos(stroll) * 0.7, Math.cos(stroll));
+    const step = Math.sin(stroll * 3.2) * 0.28;
+    villager.legs[0].rotation.x = step;
+    villager.legs[1].rotation.x = -step;
+    villager.arms[0].rotation.x = -step * 0.7;
+    villager.arms[1].rotation.x = step * 0.7;
+  }
 
   // Move simple traffic along the winding main road.
   for (const vehicle of traffic) {
