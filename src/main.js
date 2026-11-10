@@ -980,133 +980,183 @@ function updateHouseLODs() {
   for (const house of houseLodRecords) updateHouseLOD(house);
 }
 
+function makeHouseTexture(baseColor, pattern = "wall") {
+  const canvas = document.createElement("canvas");
+  canvas.width = 64;
+  canvas.height = 64;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = baseColor;
+  ctx.fillRect(0, 0, 64, 64);
+
+  // Subtle low-resolution surface variation: enough to avoid a plastic look,
+  // but intentionally simple so medium/far LODs stay inexpensive.
+  for (let i = 0; i < 110; i++) {
+    const shade = i % 2 ? "rgba(255,255,255,0.045)" : "rgba(35,28,20,0.035)";
+    ctx.fillStyle = shade;
+    const x = (i * 17) % 64;
+    const y = (i * 29) % 64;
+    ctx.fillRect(x, y, 2 + (i % 4), 1 + (i % 2));
+  }
+  if (pattern === "wall") {
+    ctx.strokeStyle = "rgba(70,58,44,0.10)";
+    ctx.lineWidth = 1;
+    for (let y = 16; y < 64; y += 16) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(64, y); ctx.stroke();
+    }
+    for (let y = 0; y < 64; y += 32) {
+      for (let x = (y / 32) * 8; x < 64; x += 16) {
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 16); ctx.stroke();
+      }
+    }
+  } else {
+    ctx.strokeStyle = "rgba(25,22,20,0.14)";
+    ctx.lineWidth = 2;
+    for (let y = 8; y < 64; y += 16) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(64, y); ctx.stroke();
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 1;
+  return texture;
+}
+
+const mediumWallMaterials = wallMaterials.map((material, index) =>
+  new THREE.MeshStandardMaterial({
+    map: makeHouseTexture(["#d9c39c", "#c6b18f", "#b9c8b8", "#d6a98a", "#b8c5d3"][index], "wall"),
+    color: 0xffffff,
+    roughness: 1
+  })
+);
+const mediumRoofMaterials = roofMaterials.map((material, index) =>
+  new THREE.MeshStandardMaterial({
+    map: makeHouseTexture(["#70463a", "#4d5354", "#8a5939", "#526c57"][index], "roof"),
+    color: 0xffffff,
+    roughness: 1
+  })
+);
+
+function createMediumDetailHouse(width, depth, wallHeight, style) {
+  const group = new THREE.Group();
+  const wallMat = mediumWallMaterials[style % mediumWallMaterials.length];
+  const roofMat = mediumRoofMaterials[style % mediumRoofMaterials.length];
+
+  const foundation = new THREE.Mesh(
+    new THREE.BoxGeometry(width + 0.3, 0.32, depth + 0.3),
+    new THREE.MeshStandardMaterial({ color: 0x77766a, roughness: 1 })
+  );
+  foundation.position.y = 0.16;
+  group.add(foundation);
+
+  const walls = new THREE.Mesh(new THREE.BoxGeometry(width, wallHeight, depth), wallMat);
+  walls.position.y = wallHeight / 2 + 0.32;
+  group.add(walls);
+
+  // Keep the same broad roof silhouette for each building style.
+  if (style % 4 === 2) {
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(width + 0.45, 0.38, depth + 0.45),
+      roofMat
+    );
+    roof.position.y = wallHeight + 0.52;
+    group.add(roof);
+  } else {
+    const roof = new THREE.Mesh(
+      new THREE.ConeGeometry(width * 0.72, style % 4 === 1 ? 3.1 : 2.8, 4),
+      roofMat
+    );
+    roof.rotation.y = Math.PI / 4;
+    roof.position.y = wallHeight + 1.75;
+    roof.scale.z = depth / width;
+    group.add(roof);
+  }
+
+  if (style % 4 === 1) {
+    const upper = new THREE.Mesh(
+      new THREE.BoxGeometry(width * 0.76, 1.8, depth * 0.76),
+      wallMat
+    );
+    upper.position.set(0, wallHeight + 1.22, -0.12);
+    group.add(upper);
+  }
+
+  // Two simple window panels and one door preserve the house identity
+  // without the many frames, knobs, posts and small props of the close model.
+  const glass = new THREE.MeshBasicMaterial({ color: 0x719eaa });
+  const doorMat = new THREE.MeshBasicMaterial({ color: 0x533c2c });
+  for (const side of [-1, 1]) {
+    const window = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.82, 0.055), glass);
+    window.position.set(side * width * 0.28, wallHeight * 0.62 + 0.32, depth / 2 + 0.035);
+    group.add(window);
+  }
+  const door = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.0, 0.07), doorMat);
+  door.position.set(0, 1.32, depth / 2 + 0.045);
+  group.add(door);
+
+  group.traverse(object => {
+    if (object.isMesh) {
+      object.castShadow = false;
+      object.receiveShadow = false;
+    }
+  });
+  return group;
+}
+
+function createLowDetailHouse(width, depth, wallHeight, style) {
+  const low = new THREE.Group();
+  const wall = new THREE.Mesh(
+    new THREE.BoxGeometry(width, wallHeight, depth),
+    wallMaterials[style % wallMaterials.length]
+  );
+  wall.position.y = wallHeight / 2 + 0.25;
+  const roof = style % 4 === 2
+    ? new THREE.Mesh(new THREE.BoxGeometry(width + 0.35, 0.32, depth + 0.35), roofMaterials[style % roofMaterials.length])
+    : new THREE.Mesh(new THREE.ConeGeometry(width * 0.72, 2.6, 4), roofMaterials[style % roofMaterials.length]);
+  roof.position.y = wallHeight + 1.65;
+  roof.rotation.y = Math.PI / 4;
+  roof.scale.z = depth / width;
+  low.add(wall, roof);
+  low.traverse(object => {
+    if (object.isMesh) {
+      object.castShadow = false;
+      object.receiveShadow = false;
+    }
+  });
+  return low;
+}
+
+function updateHouseLOD(house) {
+  const distance = Math.hypot(
+    house.position.x - player.position.x,
+    house.position.z - player.position.z
+  );
+  const low = house.userData.lowDetail;
+  const medium = house.userData.mediumDetail;
+  const high = house.userData.highDetail;
+  if (!low || !medium) return;
+
+  const useHigh = house.userData.hasHighDetail && distance < HOUSE_NEAR_DISTANCE;
+  const useMedium = distance >= HOUSE_NEAR_DISTANCE && distance < HOUSE_MID_DISTANCE;
+  low.visible = distance >= HOUSE_MID_DISTANCE;
+  medium.visible = useMedium || (!house.userData.hasHighDetail && distance < HOUSE_MID_DISTANCE);
+  if (high) high.visible = useHigh;
+}
+
+function updateHouseLODs() {
+  for (const house of houseLodRecords) updateHouseLOD(house);
+}
+
 function createHouse(x, z, scale = 1, style = 0) {
   const house = new THREE.Group();
-  const wallMaterial = wallMaterials[style % wallMaterials.length];
-  const roofMaterial = roofMaterials[style % roofMaterials.length];
   const width = style % 3 === 0 ? 7.4 : style % 3 === 1 ? 6.3 : 8.2;
   const depth = style % 2 === 0 ? 6.4 : 7.2;
   const wallHeight = style % 3 === 2 ? 5.0 : 4.1;
 
-  // Raised stone foundation and corner posts give each home a finished silhouette.
-  const foundation = new THREE.Mesh(
-    new THREE.BoxGeometry(width + 0.42, 0.48, depth + 0.42),
-    new THREE.MeshStandardMaterial({ color: 0x77766a, roughness: 1 })
-  );
-  foundation.position.y = 0.24;
-  foundation.castShadow = true;
-  foundation.receiveShadow = true;
-  house.add(foundation);
-
-  const walls = new THREE.Mesh(
-    new THREE.BoxGeometry(width, wallHeight, depth),
-    wallMaterial
-  );
-  walls.position.y = wallHeight / 2;
-  walls.castShadow = true;
-  walls.receiveShadow = true;
-  house.add(walls);
-
-  if (style % 4 === 1) {
-    // A second storey creates a taller two-level village home.
-    const upper = new THREE.Mesh(
-      new THREE.BoxGeometry(width * 0.76, 2.4, depth * 0.76),
-      wallMaterial
-    );
-    upper.position.set(0, wallHeight + 1.2, -0.15);
-    upper.castShadow = true;
-    house.add(upper);
-  }
-
-  if (style % 4 === 2) {
-    // Flat-roof modern home with a raised parapet.
-    const roof = new THREE.Mesh(
-      new THREE.BoxGeometry(width + 0.65, 0.42, depth + 0.65),
-      roofMaterial
-    );
-    roof.position.y = wallHeight + 0.22;
-    roof.castShadow = true;
-    house.add(roof);
-    const parapet = new THREE.Mesh(
-      new THREE.BoxGeometry(width * 0.72, 0.7, depth * 0.72),
-      wallMaterial
-    );
-    parapet.position.set(0, wallHeight + 0.72, -0.1);
-    house.add(parapet);
-  } else {
-    const roof = new THREE.Mesh(
-      new THREE.ConeGeometry(width * 0.72, style % 4 === 1 ? 3.4 : 3.0, 4),
-      roofMaterial
-    );
-    roof.rotation.y = Math.PI / 4;
-    roof.position.y = wallHeight + 1.45;
-    roof.scale.set(1, 1, depth / width);
-    roof.castShadow = true;
-    house.add(roof);
-  }
-
-  const door = new THREE.Mesh(
-    new THREE.BoxGeometry(1.15, 2.35, 0.14),
-    doorMaterials[style % doorMaterials.length]
-  );
-  door.position.set(0, 1.17, depth / 2 + 0.08);
-  house.add(door);
-  const doorKnob = new THREE.Mesh(new THREE.SphereGeometry(0.075, 8, 6),
-    new THREE.MeshStandardMaterial({ color: 0xc6a65c, metalness: 0.55, roughness: 0.35 }));
-  doorKnob.position.set(0.36, 1.18, depth / 2 + 0.17);
-  house.add(doorKnob);
-
-  for (const side of [-1, 1]) {
-    const windowX = side * width * 0.29;
-    const windowY = wallHeight * 0.57;
-    const windowMesh = new THREE.Mesh(new THREE.BoxGeometry(1.25, 1.05, 0.12), windowMaterial);
-    windowMesh.position.set(windowX, windowY, depth / 2 + 0.09);
-    house.add(windowMesh);
-    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0xe4d8bd, roughness: 0.9 });
-    for (const [dx, dy, w, h] of [[0, 0.57, 1.42, 0.12], [0, -0.57, 1.42, 0.12], [-0.65, 0, 0.12, 1.2], [0.65, 0, 0.12, 1.2], [0, 0, 0.07, 1.0]]) {
-      const frame = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.16), frameMaterial);
-      frame.position.set(windowX + dx, windowY + dy, depth / 2 + 0.17);
-      house.add(frame);
-    }
-  }
-
-  // A shallow doorstep and visible lintel detail make entrances easier to read.
-  const step = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.22, 0.72),
-    new THREE.MeshStandardMaterial({ color: 0x9b927f, roughness: 1 }));
-  step.position.set(0, 0.11, depth / 2 + 0.42);
-  house.add(step);
-
-  if (style % 3 === 0) {
-    // Covered porch and two support posts.
-    const porchRoof = new THREE.Mesh(
-      new THREE.BoxGeometry(width * 0.72, 0.24, 2.0),
-      roofMaterial
-    );
-    porchRoof.position.set(0, 3.0, depth / 2 + 1.0);
-    house.add(porchRoof);
-    for (const side of [-1, 1]) {
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 2.9, 0.18), doorMaterials[0]);
-      post.position.set(side * width * 0.31, 1.45, depth / 2 + 1.7);
-      house.add(post);
-    }
-  }
-
-  if (style % 3 === 1) {
-    const chimney = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 2.5, 0.8),
-      new THREE.MeshStandardMaterial({ color: 0x80594b, roughness: 1 })
-    );
-    chimney.position.set(width * 0.28, wallHeight + 2.0, -depth * 0.2);
-    house.add(chimney);
-  }
-
-  // Preserve the detailed procedural building as the medium-distance model.
-  const mediumDetail = new THREE.Group();
-  while (house.children.length) mediumDetail.add(house.children[0]);
-  house.add(mediumDetail);
+  const mediumDetail = createMediumDetailHouse(width, depth, wallHeight, style);
   const lowDetail = createLowDetailHouse(width, depth, wallHeight, style);
   lowDetail.visible = false;
-  house.add(lowDetail);
+  house.add(mediumDetail, lowDetail);
   house.userData.mediumDetail = mediumDetail;
   house.userData.lowDetail = lowDetail;
   house.userData.hasHighDetail = false;
@@ -1117,8 +1167,7 @@ function createHouse(x, z, scale = 1, style = 0) {
   house.rotation.y = houseRotation;
   scene.add(house);
   houseLodRecords.push(house);
-  // Oriented rectangular footprint closely follows the actual building walls.
-  // A small player-radius margin prevents the character clipping the corners.
+
   const collider = {
     x, z, rotation: houseRotation,
     halfWidth: width * scale / 2 + 0.48,
@@ -1131,7 +1180,7 @@ function createHouse(x, z, scale = 1, style = 0) {
   for (const side of [-1, 1]) {
     const fence = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.85, 10 * scale), fenceMaterial);
     fence.position.set(x + side * (width * 0.72) * scale, terrainHeight(x + side * (width * 0.72) * scale, z), z - 1.5);
-    fence.castShadow = true;
+    fence.castShadow = false;
     scene.add(fence);
   }
 }
