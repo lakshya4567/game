@@ -1177,50 +1177,6 @@ function createMediumDetailHouse(width, depth, wallHeight, style) {
   return group;
 }
 
-function createLowDetailHouse(width, depth, wallHeight, style) {
-  const low = new THREE.Group();
-  const wall = new THREE.Mesh(
-    new THREE.BoxGeometry(width, wallHeight, depth),
-    wallMaterials[style % wallMaterials.length]
-  );
-  wall.position.y = wallHeight / 2 + 0.25;
-  const roof = style % 4 === 2
-    ? new THREE.Mesh(new THREE.BoxGeometry(width + 0.35, 0.32, depth + 0.35), roofMaterials[style % roofMaterials.length])
-    : new THREE.Mesh(new THREE.ConeGeometry(width * 0.72, 2.6, 4), roofMaterials[style % roofMaterials.length]);
-  roof.position.y = wallHeight + 1.65;
-  roof.rotation.y = Math.PI / 4;
-  roof.scale.z = depth / width;
-  low.add(wall, roof);
-  low.traverse(object => {
-    if (object.isMesh) {
-      object.castShadow = false;
-      object.receiveShadow = false;
-    }
-  });
-  return low;
-}
-
-function updateHouseLOD(house) {
-  const distance = Math.hypot(
-    house.position.x - player.position.x,
-    house.position.z - player.position.z
-  );
-  const low = house.userData.lowDetail;
-  const medium = house.userData.mediumDetail;
-  const high = house.userData.highDetail;
-  if (!low || !medium) return;
-
-  const useHigh = house.userData.hasHighDetail && distance < HOUSE_NEAR_DISTANCE;
-  const useMedium = distance >= HOUSE_NEAR_DISTANCE && distance < HOUSE_MID_DISTANCE;
-  low.visible = distance >= HOUSE_MID_DISTANCE;
-  medium.visible = useMedium || (!house.userData.hasHighDetail && distance < HOUSE_MID_DISTANCE);
-  if (high) high.visible = useHigh;
-}
-
-function updateHouseLODs() {
-  for (const house of houseLodRecords) updateHouseLOD(house);
-}
-
 function createHouse(x, z, scale = 1, style = 0) {
   const house = new THREE.Group();
   const width = style % 3 === 0 ? 7.4 : style % 3 === 1 ? 6.3 : 8.2;
