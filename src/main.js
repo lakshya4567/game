@@ -264,6 +264,83 @@ function createRiver() {
 }
 createRiver();
 
+// A timber road bridge carries the crossroad over the river. The deck arches
+// gently above the water and follows the crossroad's curve at both approaches.
+function createRiverBridge() {
+  const centerX = 48;
+  const centerZ = Math.sin(centerX * 0.014) * 5 - 28;
+  const halfLength = 15;
+  const halfWidth = 5.35;
+  const segments = 36;
+  const vertices = [];
+  const indices = [];
+  const railLines = [[], []];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const x = centerX - halfLength + 2 * halfLength * t;
+    const z = Math.sin(x * 0.014) * 5 - 28;
+    const arch = Math.sin(Math.PI * t) * 2.55;
+    const y = terrainHeight(x, z) + 0.22 + arch;
+    vertices.push(x, y, z - halfWidth, x, y, z + halfWidth);
+    railLines[0].push(new THREE.Vector3(x, y + 0.9, z - halfWidth));
+    railLines[1].push(new THREE.Vector3(x, y + 0.9, z + halfWidth));
+    if (i < segments) {
+      const a = i * 2;
+      indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+  }
+  const deckGeometry = new THREE.BufferGeometry();
+  deckGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  deckGeometry.setIndex(indices);
+  deckGeometry.computeVertexNormals();
+  const deck = new THREE.Mesh(deckGeometry, new THREE.MeshStandardMaterial({
+    color: 0x806044, roughness: 0.92, side: THREE.DoubleSide
+  }));
+  deck.receiveShadow = true;
+  deck.castShadow = true;
+  scene.add(deck);
+
+  // Pale timber edging and repeated short posts make the bridge visible at a distance.
+  for (const rail of railLines) {
+    const beam = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rail), 48, 0.16, 5, false),
+      new THREE.MeshStandardMaterial({ color: 0x493b2d, roughness: 1 })
+    );
+    beam.castShadow = true;
+    scene.add(beam);
+  }
+  const postGeometry = new THREE.BoxGeometry(0.34, 1.05, 0.34);
+  const postMaterial = new THREE.MeshStandardMaterial({ color: 0x594532, roughness: 1 });
+  const posts = new THREE.Group();
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    const x = centerX - halfLength + 2 * halfLength * t;
+    const z = Math.sin(x * 0.014) * 5 - 28;
+    const y = terrainHeight(x, z) + 0.22 + Math.sin(Math.PI * t) * 2.55;
+    for (const side of [-1, 1]) {
+      const post = new THREE.Mesh(postGeometry, postMaterial);
+      post.position.set(x, y + 0.42, z + side * (halfWidth - 0.18));
+      post.castShadow = true;
+      posts.add(post);
+    }
+  }
+  scene.add(posts);
+
+  // Two stone piers sit beneath the outer part of the deck, clear of the channel.
+  const pierMaterial = new THREE.MeshStandardMaterial({ color: 0x77796f, roughness: 1 });
+  for (const x of [centerX - 11, centerX + 11]) {
+    const z = Math.sin(x * 0.014) * 5 - 28;
+    const top = terrainHeight(x, z) + 0.22 + Math.sin(Math.PI * ((x - centerX + halfLength) / (2 * halfLength))) * 2.55;
+    const bottom = terrainHeight(x, z) - 0.3;
+    const pier = new THREE.Mesh(new THREE.BoxGeometry(1.8, Math.max(0.5, top - bottom), 1.8), pierMaterial);
+    pier.position.set(x, (top + bottom) / 2, z);
+    pier.castShadow = true;
+    pier.receiveShadow = true;
+    scene.add(pier);
+  }
+}
+createRiverBridge();
+
 // --- Distant rolling hills ----------------------------------------------------
 const hillMaterial = new THREE.MeshStandardMaterial({
   color: 0x82977b,
@@ -368,11 +445,15 @@ while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 15) {
     : 1.15 + Math.random() * 0.75;
   const rotation = Math.random() * Math.PI * 2;
   const groundY = terrainHeight(x, z);
-  const trunkLength = species === 2
-    ? 7.0 + Math.random() * 5.0
-    : species === 1
-      ? 3.8 + Math.random() * 2.0
-      : 3.2 + Math.random() * 1.3;
+  // A portion of the woodland has short, low branching trunks.
+  const shortTrunk = Math.random() < 0.26;
+  const trunkLength = shortTrunk
+    ? 1.6 + Math.random() * 1.2
+    : species === 2
+      ? 7.0 + Math.random() * 5.0
+      : species === 1
+        ? 3.8 + Math.random() * 2.0
+        : 3.2 + Math.random() * 1.3;
   const trunkRadius = species === 2 ? 0.72 : species === 1 ? 0.58 : 0.46;
 
   // Scale trunk height independently so some trees have visibly long bare trunks.
@@ -471,6 +552,46 @@ for (let i = 0; i < 600; i++) {
 
 grass.count = grassIndex;
 scene.add(grass);
+
+// --- Forest floor: shrubs, ferns, flowers and fallen logs --------------------
+// Instanced meshes add undergrowth variety without thousands of separate draw calls.
+const undergrowth = [
+  { geometry: new THREE.IcosahedronGeometry(0.9, 1), color: 0x456b3c, count: 1050, min: 0.55, max: 1.25 },
+  { geometry: new THREE.SphereGeometry(0.72, 7, 5), color: 0x78934a, count: 780, min: 0.45, max: 1.15 },
+  { geometry: new THREE.ConeGeometry(0.42, 1.5, 5), color: 0x4f7b48, count: 900, min: 0.55, max: 1.2 },
+  { geometry: new THREE.ConeGeometry(0.16, 0.9, 5), color: 0xd6bd72, count: 260, min: 0.55, max: 1.0 },
+  { geometry: new THREE.ConeGeometry(0.15, 0.82, 5), color: 0xc77d68, count: 210, min: 0.55, max: 1.0 }
+];
+const plantMeshes = undergrowth.map((plant, index) => {
+  const material = new THREE.MeshStandardMaterial({ color: plant.color, roughness: 1 });
+  const mesh = new THREE.InstancedMesh(plant.geometry, material, plant.count);
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  const dummy = new THREE.Object3D();
+  let placed = 0;
+  let tries = 0;
+  while (placed < plant.count && tries < plant.count * 12) {
+    tries++;
+    const x = (Math.random() - 0.5) * 475;
+    const z = (Math.random() - 0.5) * 475;
+    if (Math.abs(x - roadCenterX(z)) < 8) continue;
+    if (Math.abs(z - (Math.sin(x * 0.014) * 5 - 28)) < 7) continue;
+    if (Math.abs(x - riverCenterX(z)) < 11) continue;
+    if (reservedVillageZones.some(v => Math.hypot(x - v.x, z - v.z) < 29)) continue;
+    // Keep some clearings so the forest floor remains readable.
+    if (Math.random() < 0.12) continue;
+    const scale = plant.min + Math.random() * (plant.max - plant.min);
+    dummy.position.set(x, terrainHeight(x, z) + 0.28 * scale, z);
+    dummy.rotation.set(0, Math.random() * Math.PI * 2, (Math.random() - 0.5) * 0.12);
+    dummy.scale.set(scale, scale, scale);
+    dummy.updateMatrix();
+    mesh.setMatrixAt(placed++, dummy.matrix);
+  }
+  mesh.count = placed;
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
+  return mesh;
+});
 
 // --- Small roadside villages -------------------------------------------------
 const wallMaterials = [
@@ -615,6 +736,72 @@ const villageGroups = [
   { x: 112, z: 82 },
   { x: -96, z: 42 }
 ];
+
+// Dirt-and-gravel lanes branch from the main/cross road and lead right into
+// each settlement. The eastern village joins the crossroad on the far bank.
+function createVillageLane(points, width = 5.8) {
+  const curve = new THREE.CatmullRomCurve3(points.map(([x, z]) =>
+    new THREE.Vector3(x, 0, z)
+  ));
+  const segments = 64;
+  const vertices = [];
+  const indices = [];
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const point = curve.getPoint(t);
+    const tangent = curve.getTangent(t);
+    const sideX = -tangent.z;
+    const sideZ = tangent.x;
+    for (const side of [-1, 1]) {
+      const x = point.x + sideX * width * 0.5 * side;
+      const z = point.z + sideZ * width * 0.5 * side;
+      vertices.push(x, terrainHeight(x, z) + 0.15, z);
+    }
+    if (i < segments) {
+      const a = i * 2;
+      indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+  const lane = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+    color: 0x82765d, roughness: 1, side: THREE.DoubleSide
+  }));
+  lane.receiveShadow = true;
+  scene.add(lane);
+
+  // Narrow gravel shoulders soften the road edge.
+  for (const side of [-1, 1]) {
+    const edgePoints = [];
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const point = curve.getPoint(t);
+      const tangent = curve.getTangent(t);
+      const x = point.x - tangent.z * (width * 0.5 + 0.12) * side;
+      const z = point.z + tangent.x * (width * 0.5 + 0.12) * side;
+      edgePoints.push(new THREE.Vector3(x, terrainHeight(x, z) + 0.18, z));
+    }
+    const edge = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(edgePoints), segments, 0.055, 4, false),
+      new THREE.MeshStandardMaterial({ color: 0xb2a184, roughness: 1 })
+    );
+    scene.add(edge);
+  }
+}
+
+villageGroups.forEach((village, index) => {
+  const startZ = village.z + (village.z < 0 ? 23 : -23);
+  const startX = village.x;
+  if (index === 1) {
+    const crossZ = Math.sin(startX * 0.014) * 5 - 28;
+    createVillageLane([[startX, startZ], [startX + 8, 18], [startX + 4, crossZ + 10], [startX, crossZ]]);
+  } else {
+    const roadX = roadCenterX(startZ);
+    createVillageLane([[startX, startZ], [startX * 0.58, startZ + 3], [roadX - 3, startZ + 1], [roadX, startZ]]);
+  }
+});
 villageGroups.forEach((village, groupIndex) => {
   const placements = [
     [-10, -7, 1.18], [10, -9, 1.08], [-13, 9, 1.12],
