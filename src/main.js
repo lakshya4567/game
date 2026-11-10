@@ -11,18 +11,17 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xb9d7e5);
 scene.fog = new THREE.FogExp2(0xb9d7e5, 0.00145);
 
-const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 1100);
+const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 620);
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: 'low-power'
 });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.0));
 renderer.setSize(innerWidth, innerHeight);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.enabled = false; // Shadow maps are expensive on older integrated GPUs.
 document.querySelector('#game').appendChild(renderer.domElement);
 
 // Locally hosted GLB assets are loaded once and cached. Procedural fallbacks
@@ -356,9 +355,8 @@ createRiverBridge();
 // --- Soft procedural cloud layers -------------------------------------------
 // Low-poly volumetric cloud banks add depth while keeping geometry inexpensive.
 const cloudGroups = [];
-const cloudMaterial = new THREE.MeshStandardMaterial({
-  color: 0xf4f6f4, roughness: 1, metalness: 0,
-  transparent: true, opacity: 0.88, depthWrite: false
+const cloudMaterial = new THREE.MeshBasicMaterial({
+  color: 0xf4f6f4, transparent: true, opacity: 0.82, depthWrite: false
 });
 const cloudPuffs = [
   [0, 0, 0, 8, 3.1, 5],
@@ -366,7 +364,7 @@ const cloudPuffs = [
   [-6, -0.2, -1.5, 6.2, 2.5, 4.2],
   [2, 1.1, -4, 5.5, 2.3, 4.0]
 ];
-for (let i = 0; i < 16; i++) {
+for (let i = 0; i < 8; i++) {
   const cloud = new THREE.Group();
   const scale = 0.75 + Math.random() * 1.15;
   for (const [x, y, z, sx, sy, sz] of cloudPuffs) {
@@ -387,13 +385,13 @@ const hillMaterial = new THREE.MeshStandardMaterial({
   roughness: 1
 });
 
-for (let i = 0; i < 20; i++) {
+for (let i = 0; i < 10; i++) {
   const radius = 18 + Math.random() * 22;
   const hill = new THREE.Mesh(
     new THREE.SphereGeometry(radius, 14, 10),
     hillMaterial
   );
-  const angle = (i / 20) * Math.PI * 2;
+  const angle = (i / 10) * Math.PI * 2;
   const distance = 225 + Math.random() * 45;
   hill.position.set(
     Math.cos(angle) * distance,
@@ -408,7 +406,7 @@ for (let i = 0; i < 20; i++) {
 // --- Diverse, performance-conscious forest ----------------------------------
 // A more open forest: fewer trees, varied silhouettes, natural colour variation,
 // and occasional tall-trunk trees. All trees are instanced for low draw-call cost.
-const TREE_COUNT = 5600;
+const TREE_COUNT = 2800;
 const TREE_CELL_SIZE = 12;
 const treeCollisionGrid = new Map();
 const treeTrunkMaterial = new THREE.MeshStandardMaterial({ color: 0x60432f, roughness: 1 });
@@ -600,7 +598,9 @@ while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 15) {
     x, z, groundY, rotation, species, index,
     modelScale: 0.82 + Math.random() * 0.34,
     proxyRefs: [],
-    modelHidden: false
+    modelHidden: false,
+    outOfView: false,
+    proxyHidden: false
   });
   placedTrees++;
 }
@@ -630,8 +630,12 @@ const TREE_MODEL_URLS = [
   `${MODEL_ASSET_BASE}birch-tree.glb`
 ];
 const TREE_MODEL_HEIGHTS = [15.5, 8.5, 13.5];
-const TREE_MODEL_POOL_SIZE = 30;
-const TREE_MODEL_DISTANCE = 76;
+const TREE_MODEL_POOL_SIZE = 7;
+const TREE_MODEL_DISTANCE = 48;
+const TREE_CULL_DISTANCE = 118;
+const cameraFrustum = new THREE.Frustum();
+const cameraViewProjection = new THREE.Matrix4();
+const treeCullSphere = new THREE.Sphere(new THREE.Vector3(), 9);
 const detailedTreeAssets = new Map();
 const zeroTreeMatrix = new THREE.Matrix4().makeScale(0, 0, 0);
 
@@ -660,10 +664,12 @@ for (const record of treeRecords) {
 }
 
 function setTreeProxyHidden(record, hidden) {
-  if (record.modelHidden === hidden) return;
+  record.modelHidden = hidden;
+  const shouldHide = record.modelHidden || record.outOfView;
+  if (record.proxyHidden === shouldHide) return;
   const matrix = new THREE.Matrix4();
   for (const ref of record.proxyRefs) {
-    if (hidden) {
+    if (shouldHide) {
       ref.mesh.setMatrixAt(ref.index, zeroTreeMatrix);
     } else {
       matrix.fromArray(ref.original);
@@ -671,7 +677,28 @@ function setTreeProxyHidden(record, hidden) {
     }
     ref.mesh.instanceMatrix.needsUpdate = true;
   }
-  record.modelHidden = hidden;
+  record.proxyHidden = shouldHide;
+}
+
+function updateCameraFrustum() {
+  camera.updateMatrixWorld();
+  cameraViewProjection.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  cameraFrustum.setFromProjectionMatrix(cameraViewProjection);
+}
+
+function updateTreeVisibility() {
+  updateCameraFrustum();
+  const px = player.position.x;
+  const pz = player.position.z;
+  const maxDistanceSq = TREE_CULL_DISTANCE * TREE_CULL_DISTANCE;
+  for (const record of treeRecords) {
+    const dx = record.x - px;
+    const dz = record.z - pz;
+    const inRange = dx * dx + dz * dz < maxDistanceSq;
+    treeCullSphere.center.set(record.x, record.groundY + 6.5, record.z);
+    record.outOfView = !inRange || !cameraFrustum.intersectsSphere(treeCullSphere);
+    setTreeProxyHidden(record, record.modelHidden);
+  }
 }
 
 async function loadDetailedTreeAsset(species, url, targetHeight) {
@@ -733,7 +760,11 @@ function updateDetailedTreeLODs() {
         record,
         distanceSq: (record.x - playerX) ** 2 + (record.z - playerZ) ** 2
       }))
-      .filter(item => item.distanceSq < TREE_MODEL_DISTANCE * TREE_MODEL_DISTANCE)
+      .filter(item => {
+        if (item.distanceSq >= TREE_MODEL_DISTANCE * TREE_MODEL_DISTANCE) return false;
+        treeCullSphere.center.set(item.record.x, item.record.groundY + 6.5, item.record.z);
+        return cameraFrustum.intersectsSphere(treeCullSphere);
+      })
       .sort((a, b) => a.distanceSq - b.distanceSq)
       .slice(0, TREE_MODEL_POOL_SIZE)
       .map(item => item.record);
@@ -768,11 +799,11 @@ const grassMaterial = new THREE.MeshStandardMaterial({
   color: 0x78965a,
   roughness: 1
 });
-const grass = new THREE.InstancedMesh(grassGeometry, grassMaterial, 2200);
+const grass = new THREE.InstancedMesh(grassGeometry, grassMaterial, 850);
 const grassDummy = new THREE.Object3D();
 let grassIndex = 0;
 
-for (let i = 0; i < 2200; i++) {
+for (let i = 0; i < 850; i++) {
   const x = (Math.random() - 0.5) * 480;
   const z = (Math.random() - 0.5) * 480;
   if (Math.abs(x - roadCenterX(z)) < 6) continue;
@@ -793,11 +824,11 @@ scene.add(grass);
 // --- Forest floor: shrubs, ferns, flowers and fallen logs --------------------
 // Instanced meshes add undergrowth variety without thousands of separate draw calls.
 const undergrowth = [
-  { geometry: new THREE.IcosahedronGeometry(0.9, 1), color: 0x456b3c, count: 1050, min: 0.55, max: 1.25 },
-  { geometry: new THREE.SphereGeometry(0.72, 7, 5), color: 0x78934a, count: 780, min: 0.45, max: 1.15 },
-  { geometry: new THREE.ConeGeometry(0.42, 1.5, 5), color: 0x4f7b48, count: 900, min: 0.55, max: 1.2 },
-  { geometry: new THREE.ConeGeometry(0.16, 0.9, 5), color: 0xd6bd72, count: 260, min: 0.55, max: 1.0 },
-  { geometry: new THREE.ConeGeometry(0.15, 0.82, 5), color: 0xc77d68, count: 210, min: 0.55, max: 1.0 }
+  { geometry: new THREE.IcosahedronGeometry(0.9, 1), color: 0x456b3c, count: 360, min: 0.55, max: 1.25 },
+  { geometry: new THREE.SphereGeometry(0.72, 7, 5), color: 0x78934a, count: 260, min: 0.45, max: 1.15 },
+  { geometry: new THREE.ConeGeometry(0.42, 1.5, 5), color: 0x4f7b48, count: 300, min: 0.55, max: 1.2 },
+  { geometry: new THREE.ConeGeometry(0.16, 0.9, 5), color: 0xd6bd72, count: 90, min: 0.55, max: 1.0 },
+  { geometry: new THREE.ConeGeometry(0.15, 0.82, 5), color: 0xc77d68, count: 75, min: 0.55, max: 1.0 }
 ];
 const plantMeshes = undergrowth.map((plant, index) => {
   const material = new THREE.MeshStandardMaterial({ color: plant.color, roughness: 1 });
@@ -870,10 +901,10 @@ async function replaceHouseWithGLB(house, style, collider, width, depth, wallHei
     if (!Number.isFinite(size.y) || size.y <= 0) throw new Error('House model has invalid dimensions');
 
     // Fit each downloaded model inside the existing village footprint.
-    const targetHeight = wallHeight + 2.8;
+    const targetHeight = wallHeight + 4.0;
     const fitScale = Math.min(
-      (width * 1.25) / size.x,
-      (depth * 1.25) / size.z,
+      (width * 1.48) / size.x,
+      (depth * 1.48) / size.z,
       targetHeight / size.y
     );
     const center = bounds.getCenter(new THREE.Vector3());
@@ -1111,8 +1142,8 @@ villageLanePaths.forEach(curve => {
 });
 villageGroups.forEach((village, groupIndex) => {
   const placements = [
-    [-10, -7, 1.18], [10, -9, 1.08], [-13, 9, 1.12],
-    [12, 9, 1.22], [0, 17, 0.96]
+    [-10, -7, 1.28], [10, -9, 1.2], [-13, 9, 1.24],
+    [12, 9, 1.3], [0, 17, 1.12]
   ];
   placements.forEach(([dx, dz, scale], index) => {
     createHouse(village.x + dx, village.z + dz, scale, groupIndex + index);
@@ -1307,6 +1338,7 @@ const traffic = [];
 // it later for professional animation and more detailed clothing.
 const player = new THREE.Group();
 const character = new THREE.Group();
+character.scale.setScalar(0.82);
 player.add(character);
 
 const jacket = new THREE.MeshStandardMaterial({ color: 0x344b60, roughness: 0.88 });
@@ -1404,7 +1436,7 @@ renderer.domElement.addEventListener('pointermove', (event) => {
 });
 
 const clock = new THREE.Clock();
-const cameraOffset = new THREE.Vector3(0, 5.0, 9.4);
+const cameraOffset = new THREE.Vector3(0, 4.4, 8.2);
 const cameraTarget = new THREE.Vector3();
 const upAxis = new THREE.Vector3(0, 1, 0);
 const velocity = new THREE.Vector3();
@@ -1426,7 +1458,7 @@ function animate() {
   if (keys.KeyD || keys.ArrowRight) inputDirection.addScaledVector(right, 1);
 
   const running = keys.ShiftLeft || keys.ShiftRight;
-  const maxSpeed = running ? 12.5 : 6.2;
+  const maxSpeed = running ? 10.5 : 5.2;
   if (inputDirection.lengthSq() > 0) {
     inputDirection.normalize();
     desiredVelocity.copy(inputDirection).multiplyScalar(maxSpeed);
@@ -1557,26 +1589,13 @@ function animate() {
   }
 
   if (clock.elapsedTime >= nextTreeLodUpdate) {
+    updateTreeVisibility();
     updateDetailedTreeLODs();
-    nextTreeLodUpdate = clock.elapsedTime + 0.35;
+    nextTreeLodUpdate = clock.elapsedTime + 0.55;
   }
 
-  // Gentle, intersecting sine waves animate the river surface without a heavy shader.
-  const riverWater = scene.userData.riverWater;
-  if (riverWater) {
-    const positions = riverWater.geometry.attributes.position;
-    const base = riverWater.userData.basePositions;
-    const time = clock.elapsedTime;
-    for (let i = 0; i < positions.count; i++) {
-      const x = base[i * 3];
-      const z = base[i * 3 + 2];
-      const wave = Math.sin(x * 0.42 + time * 1.8) * 0.075
-        + Math.cos(z * 0.19 - time * 1.25) * 0.045;
-      positions.setY(i, base[i * 3 + 1] + wave);
-    }
-    positions.needsUpdate = true;
-    riverWater.geometry.computeVertexNormals();
-  }
+  // Keep the river surface static on low-end devices; recomputing vertex normals
+  // every frame was a significant CPU cost for a small visual effect.
 
   renderer.render(scene, camera);
 }
@@ -1586,7 +1605,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.0));
 });
 
 document.querySelector('#loading').classList.add('hidden');
