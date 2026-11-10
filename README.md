@@ -55,7 +55,7 @@ Actions tab. The first deployment can take a few minutes.
 | --- | --- |
 | W / A / S / D | Move |
 | Arrow keys | Move |
-| Shift | Run |
+| Shift | Sprint |
 | Hold and drag mouse | Rotate the camera |
 
 ## Current features
@@ -74,7 +74,7 @@ Actions tab. The first deployment can take a few minutes.
 
 ## Latest update
 
-**Graphics and environment alignment update**
+**Movement and world expansion update**
 
 - Replaced the plain background with a Three.js sky and directional sunlight.
 - Added atmospheric fog and improved tone mapping.
@@ -82,12 +82,12 @@ Actions tab. The first deployment can take a few minutes.
 - Rebuilt the road as a terrain-following mesh.
 - Improved the procedural character from a simple capsule into a recognisable human-shaped placeholder.
 - Added simple arm and leg movement while walking and running.
-- Capped renderer pixel ratio and kept environment geometry lightweight.
+- Added smooth movement acceleration/braking, gradual turning and improved running animation.\n- Added a crossing road, a winding river with banks and larger layered spruce trees.\n- Kept the added environment procedural and lightweight for modest PCs.
 
 ## Known limitations
 
 - The character is a procedural placeholder, not a professionally rigged animated model.
-- Character-to-tree collision is not implemented yet.
+- Character collision with trees, roads and river banks is not implemented yet. The river is currently visual scenery and cannot be crossed as a physics obstacle.
 - The character follows terrain height, but does not yet tilt to match steep slopes.
 - The world is currently a bounded prototype; infinite/chunk-based terrain streaming is not implemented.
 - Trees are stylised low-poly models, not photorealistic asset models.
