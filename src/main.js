@@ -1460,6 +1460,21 @@ function createCar(color) {
   return { car, wheels };
 }
 
+// --- Player-controlled sports car -------------------------------------------
+// A separate drivable car keeps the decorative traffic system untouched.
+const driveVehicle = createCar(0xd9362b);
+const driveCar = driveVehicle.car;
+driveCar.scale.setScalar(0.92);
+scene.add(driveCar);
+const driveState = {
+  active: false,
+  speed: 0,
+  yaw: 0,
+  enterExitRequested: false
+};
+driveCar.position.set(roadCenterX(12) + 2.55, terrainHeight(roadCenterX(12) + 2.55, 12) + 0.03, 12);
+driveCar.rotation.y = driveState.yaw;
+
 const traffic = [];
 [0xffbd55, 0xd94d43, 0x477eae, 0xe2e1d8].forEach((color, index) => {
   const vehicle = createCar(color);
@@ -1648,6 +1663,60 @@ function animate() {
     return blockedByHouse(x, z) || blockedByTree(x, z);
   }
 
+  // E toggles driving when close to the parked sports car, or exits beside it.
+  if (driveState.enterExitRequested) {
+    if (driveState.active) {
+      driveState.active = false;
+      driveState.speed = 0;
+      character.visible = true;
+      const exitX = driveCar.position.x - Math.cos(driveState.yaw) * 2.9;
+      const exitZ = driveCar.position.z + Math.sin(driveState.yaw) * 2.9;
+      player.position.set(
+        THREE.MathUtils.clamp(exitX, -245, 245),
+        terrainHeight(exitX, exitZ),
+        THREE.MathUtils.clamp(exitZ, -245, 245)
+      );
+    } else if (Math.hypot(player.position.x - driveCar.position.x, player.position.z - driveCar.position.z) < 6) {
+      driveState.active = true;
+      driveState.yaw = driveCar.rotation.y;
+      driveState.speed = 0;
+      character.visible = false;
+    }
+    driveState.enterExitRequested = false;
+  }
+
+  // Driving uses smooth throttle, reverse, braking and speed-sensitive steering.
+  if (driveState.active) {
+    const throttle = keys.KeyW || keys.ArrowUp;
+    const reverse = keys.KeyS || keys.ArrowDown;
+    const braking = keys.Space;
+    if (throttle) driveState.speed = Math.min(34, driveState.speed + 22 * dt);
+    else if (reverse) driveState.speed = Math.max(-12, driveState.speed - 16 * dt);
+    else driveState.speed *= Math.exp(-1.35 * dt);
+    if (braking) driveState.speed *= Math.exp(-6.5 * dt);
+
+    const steering = (keys.KeyA || keys.ArrowLeft ? 1 : 0)
+      - (keys.KeyD || keys.ArrowRight ? 1 : 0);
+    const steeringGrip = THREE.MathUtils.clamp(Math.abs(driveState.speed) / 8, 0, 1);
+    driveState.yaw += steering * 1.65 * steeringGrip * dt * (driveState.speed >= 0 ? 1 : -1);
+
+    const oldX = driveCar.position.x;
+    const oldZ = driveCar.position.z;
+    const nextCarX = THREE.MathUtils.clamp(oldX + Math.sin(driveState.yaw) * driveState.speed * dt, -245, 245);
+    const nextCarZ = THREE.MathUtils.clamp(oldZ + Math.cos(driveState.yaw) * driveState.speed * dt, -245, 245);
+    if (!blockedByObstacle(nextCarX, nextCarZ)) {
+      driveCar.position.x = nextCarX;
+      driveCar.position.z = nextCarZ;
+    } else {
+      driveState.speed *= -0.12;
+    }
+    driveCar.position.y = terrainHeight(driveCar.position.x, driveCar.position.z) + 0.03;
+    driveCar.rotation.y = driveState.yaw;
+    for (const wheel of driveVehicle.wheels) wheel.rotation.x -= driveState.speed * dt / 0.43;
+    player.position.copy(driveCar.position);
+    player.rotation.y = driveState.yaw;
+  }
+
   // Resolve axes separately for accurate wall/tree sliding.
   let resolvedX = nextX;
   let resolvedZ = nextZ;
@@ -1690,10 +1759,20 @@ function animate() {
   rightArm.rotation.x = swing * 0.72;
   character.position.y = moving ? Math.abs(Math.sin(walkTime * 2)) * 0.065 * stride : 0;
 
-  const rotatedOffset = cameraOffset.clone().applyAxisAngle(upAxis, yaw);
-  cameraTarget.copy(player.position).add(rotatedOffset);
+  const cameraFocus = driveState.active ? driveCar.position : player.position;
+  const activeCameraOffset = driveState.active
+    ? new THREE.Vector3(0, 5.0, -10.5).applyAxisAngle(upAxis, driveState.yaw)
+    : cameraOffset.clone().applyAxisAngle(upAxis, yaw);
+  cameraTarget.copy(cameraFocus).add(activeCameraOffset);
   camera.position.lerp(cameraTarget, 1 - Math.pow(0.0005, dt));
-  camera.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
+  camera.lookAt(cameraFocus.x, cameraFocus.y + (driveState.active ? 1.15 : 1.5), cameraFocus.z);
+
+  const speedometer = document.querySelector('#speedometer');
+  if (speedometer) {
+    speedometer.textContent = driveState.active
+      ? `SPORT MODE  ·  ${Math.round(Math.abs(driveState.speed) * 3.6)} KM/H`
+      : 'E NEAR THE RED CAR TO DRIVE';
+  }
 
   // Clouds drift slowly across the sky to create a living horizon.
   for (const cloud of cloudGroups) {
