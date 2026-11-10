@@ -25,8 +25,8 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.querySelector('#game').appendChild(renderer.domElement);
 
-// External CC0 GLB assets are loaded once and cached. Procedural fallbacks remain
-// in the scene if a model host is offline or blocks a cross-origin request.
+// Locally hosted GLB assets are loaded once and cached. Procedural fallbacks
+// remain available if a file is missing or cannot be decoded.
 const gltfLoader = new GLTFLoader();
 const gltfPromises = new Map();
 function loadGLTF(url) {
@@ -621,10 +621,13 @@ allTreeMeshes.forEach(mesh => {
 // --- Real tree models with near/far LOD --------------------------------------
 // The original instanced trees remain the inexpensive distant LOD. Up close,
 // a small pool of real GLB trees is instanced and the matching proxy is hidden.
+// Public models are served from this site's own origin. BASE_URL keeps paths
+// correct both on GitHub Pages (/game/) and during local Vite development (/).
+const MODEL_ASSET_BASE = `${import.meta.env.BASE_URL}models/`;
 const TREE_MODEL_URLS = [
-  'https://files.innerscene.com/library/mature-norway-spruce-tree-48c2566f/a285b3017c941e802efc/mature-norway-spruce-tree.glb',
-  'https://files.innerscene.com/library/oak-street-tree-detailed-leaves-a273fef9/4a26d0fea7474835bf61/oak-detailed.glb',
-  'https://files.innerscene.com/library/mature-silver-birch-tree-8e297753/aa07a142ddd1cb8e3cfc/mature-silver-birch-tree.glb'
+  `${MODEL_ASSET_BASE}mature-norway-spruce-tree.glb`,
+  `${MODEL_ASSET_BASE}oak-detailed.glb`,
+  `${MODEL_ASSET_BASE}birch-tree.glb`
 ];
 const TREE_MODEL_HEIGHTS = [15.5, 8.5, 13.5];
 const TREE_MODEL_POOL_SIZE = 30;
@@ -851,9 +854,10 @@ const doorMaterials = [
 
 const houseColliders = [];
 const HOUSE_MODEL_URLS = [
-  'https://grab3d.com/dl/bungalow/bungalow.glb',
-  'https://grab3d.com/dl/stone-house/stone-house.glb',
-  'https://grab3d.com/dl/modern-house/modern-house.glb'
+  `${MODEL_ASSET_BASE}bungalow.glb`,
+  `${MODEL_ASSET_BASE}stone-house.glb`,
+  `${MODEL_ASSET_BASE}modern-house.glb`,
+  `${MODEL_ASSET_BASE}adobe-house.glb`
 ];
 
 async function replaceHouseWithGLB(house, style, collider, width, depth, wallHeight, outerScale) {
