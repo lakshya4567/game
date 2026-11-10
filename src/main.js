@@ -8,9 +8,9 @@ import './style.css';
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0xb9d7e5);
-scene.fog = new THREE.FogExp2(0xb9d7e5, 0.0026);
+scene.fog = new THREE.FogExp2(0xb9d7e5, 0.00145);
 
-const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 650);
+const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 1100);
 const renderer = new THREE.WebGLRenderer({
   antialias: true,
   powerPreference: 'low-power'
@@ -48,10 +48,10 @@ const sun = new THREE.DirectionalLight(0xffe5c2, 2.1);
 sun.position.copy(sunDirection).multiplyScalar(120);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
-sun.shadow.camera.left = -70;
-sun.shadow.camera.right = 70;
-sun.shadow.camera.top = 70;
-sun.shadow.camera.bottom = -70;
+sun.shadow.camera.left = -135;
+sun.shadow.camera.right = 135;
+sun.shadow.camera.top = 135;
+sun.shadow.camera.bottom = -135;
 sun.shadow.camera.near = 1;
 sun.shadow.camera.far = 250;
 sun.shadow.bias = -0.00025;
@@ -75,7 +75,7 @@ function terrainHeight(x, z) {
   return baseTerrainHeight(x, z) - smoothChannel * 2.15;
 }
 
-const terrainGeometry = new THREE.PlaneGeometry(320, 320, 120, 120);
+const terrainGeometry = new THREE.PlaneGeometry(520, 520, 180, 180);
 const terrainPositions = terrainGeometry.attributes.position;
 
 for (let i = 0; i < terrainPositions.count; i++) {
@@ -109,7 +109,7 @@ function createRoad() {
   const indices = [];
 
   for (let i = 0; i <= segments; i++) {
-    const z = -155 + (310 * i / segments);
+    const z = -250 + (500 * i / segments);
     const centerX = roadCenterX(z);
     const leftX = centerX - halfWidth;
     const rightX = centerX + halfWidth;
@@ -163,7 +163,7 @@ function createCrossRoad() {
   const vertices = [];
   const indices = [];
   for (let i = 0; i <= segments; i++) {
-    const x = -145 + (290 * i / segments);
+    const x = -245 + (490 * i / segments);
     const centerZ = Math.sin(x * 0.014) * 5 - 28;
     const leftZ = centerZ - halfWidth;
     const rightZ = centerZ + halfWidth;
@@ -196,7 +196,7 @@ function createRiver() {
   const vertices = [];
   const indices = [];
   for (let i = 0; i <= segments; i++) {
-    const z = -155 + 310 * i / segments;
+    const z = -250 + 500 * i / segments;
     const centerX = riverCenterX(z);
     const leftX = centerX - halfWidth;
     const rightX = centerX + halfWidth;
@@ -223,13 +223,15 @@ function createRiver() {
   }));
   water.renderOrder = 2;
   water.receiveShadow = true;
+  water.userData.basePositions = new Float32Array(geometry.attributes.position.array);
   scene.add(water);
+  scene.userData.riverWater = water;
 
   // Soft sandy/pebbly banks make the water edge readable from a distance.
   for (const side of [-1, 1]) {
     const points = [];
     for (let i = 0; i <= segments; i++) {
-      const z = -155 + 310 * i / segments;
+      const z = -250 + 500 * i / segments;
       const x = riverCenterX(z) + side * 9.7;
       points.push(new THREE.Vector3(x, baseTerrainHeight(x, z) - 0.02, z));
     }
@@ -255,7 +257,7 @@ for (let i = 0; i < 20; i++) {
     hillMaterial
   );
   const angle = (i / 20) * Math.PI * 2;
-  const distance = 135 + Math.random() * 35;
+  const distance = 225 + Math.random() * 45;
   hill.position.set(
     Math.cos(angle) * distance,
     -radius * 0.54,
@@ -285,8 +287,8 @@ const spruceTierGeometry = [
 
 // Taller layered spruce trees, kept clear of roads and the river corridor.
 for (let i = 0; i < 245; i++) {
-  const x = (Math.random() - 0.5) * 290;
-  const z = (Math.random() - 0.5) * 290;
+  const x = (Math.random() - 0.5) * 480;
+  const z = (Math.random() - 0.5) * 480;
   if (Math.abs(x - roadCenterX(z)) < 9) continue;
   if (Math.abs(z - (Math.sin(x * 0.014) * 5 - 28)) < 7) continue;
   if (Math.abs(x - riverCenterX(z)) < 10) continue;
@@ -322,8 +324,8 @@ const grassDummy = new THREE.Object3D();
 let grassIndex = 0;
 
 for (let i = 0; i < 600; i++) {
-  const x = (Math.random() - 0.5) * 290;
-  const z = (Math.random() - 0.5) * 290;
+  const x = (Math.random() - 0.5) * 480;
+  const z = (Math.random() - 0.5) * 480;
   if (Math.abs(x - roadCenterX(z)) < 6) continue;
 
   grassDummy.position.set(x, terrainHeight(x, z) + 0.28, z);
@@ -358,6 +360,8 @@ const doorMaterials = [
   new THREE.MeshStandardMaterial({ color: 0x533c2c, roughness: 1 }),
   new THREE.MeshStandardMaterial({ color: 0x344b55, roughness: 1 })
 ];
+
+const houseColliders = [];
 
 function createHouse(x, z, scale = 1, style = 0) {
   const house = new THREE.Group();
@@ -455,6 +459,11 @@ function createHouse(x, z, scale = 1, style = 0) {
   house.position.set(x, terrainHeight(x, z), z);
   house.rotation.y = (Math.random() - 0.5) * 0.35;
   scene.add(house);
+  // Conservative circular footprint keeps the player outside walls and corners.
+  houseColliders.push({
+    x, z,
+    radius: Math.hypot(width * scale * 0.56, depth * scale * 0.56) + 1.15
+  });
 
   const fenceMaterial = new THREE.MeshStandardMaterial({ color: 0x8a7759, roughness: 1 });
   for (const side of [-1, 1]) {
@@ -467,7 +476,7 @@ function createHouse(x, z, scale = 1, style = 0) {
 
 const villageGroups = [
   { x: -42, z: -76 },
-  { x: 72, z: 82 },
+  { x: 112, z: 82 },
   { x: -96, z: 42 }
 ];
 villageGroups.forEach((village, groupIndex) => {
@@ -767,10 +776,38 @@ function animate() {
   // Smooth acceleration and braking instead of instantly changing position.
   const response = inputDirection.lengthSq() > 0 ? 7.5 : 10.5;
   velocity.lerp(desiredVelocity, 1 - Math.exp(-response * dt));
-  player.position.addScaledVector(velocity, dt);
+  const previousX = player.position.x;
+  const previousZ = player.position.z;
+  const nextX = THREE.MathUtils.clamp(previousX + velocity.x * dt, -245, 245);
+  const nextZ = THREE.MathUtils.clamp(previousZ + velocity.z * dt, -245, 245);
 
-  player.position.x = THREE.MathUtils.clamp(player.position.x, -150, 150);
-  player.position.z = THREE.MathUtils.clamp(player.position.z, -150, 150);
+  function blockedByHouse(x, z) {
+    return houseColliders.some((house) => {
+      const dx = x - house.x;
+      const dz = z - house.z;
+      return dx * dx + dz * dz < house.radius * house.radius;
+    });
+  }
+
+  // Resolve axes separately so the player can slide along a building wall.
+  let resolvedX = nextX;
+  let resolvedZ = nextZ;
+  if (blockedByHouse(resolvedX, resolvedZ)) {
+    if (!blockedByHouse(nextX, previousZ)) {
+      resolvedZ = previousZ;
+      velocity.z = 0;
+    } else if (!blockedByHouse(previousX, nextZ)) {
+      resolvedX = previousX;
+      velocity.x = 0;
+    } else {
+      resolvedX = previousX;
+      resolvedZ = previousZ;
+      velocity.set(0, 0, 0);
+    }
+  }
+
+  player.position.x = resolvedX;
+  player.position.z = resolvedZ;
   player.position.y = terrainHeight(player.position.x, player.position.z);
 
   const horizontalSpeed = Math.hypot(velocity.x, velocity.z);
@@ -816,7 +853,7 @@ function animate() {
   // Move simple traffic along the winding main road.
   for (const vehicle of traffic) {
     vehicle.z += vehicle.speed * dt;
-    if (vehicle.z > 158) vehicle.z = -158;
+    if (vehicle.z > 255) vehicle.z = -255;
     const x = roadCenterX(vehicle.z) + vehicle.lane;
     vehicle.car.position.set(x, terrainHeight(x, vehicle.z) + 0.03, vehicle.z);
     vehicle.car.rotation.y = -Math.atan2(
@@ -824,6 +861,23 @@ function animate() {
       1
     );
     for (const wheel of vehicle.wheels) wheel.rotation.x -= vehicle.speed * dt / 0.43;
+  }
+
+  // Gentle, intersecting sine waves animate the river surface without a heavy shader.
+  const riverWater = scene.userData.riverWater;
+  if (riverWater) {
+    const positions = riverWater.geometry.attributes.position;
+    const base = riverWater.userData.basePositions;
+    const time = clock.elapsedTime;
+    for (let i = 0; i < positions.count; i++) {
+      const x = base[i * 3];
+      const z = base[i * 3 + 2];
+      const wave = Math.sin(x * 0.42 + time * 1.8) * 0.075
+        + Math.cos(z * 0.19 - time * 1.25) * 0.045;
+      positions.setY(i, base[i * 3 + 1] + wave);
+    }
+    positions.needsUpdate = true;
+    riverWater.geometry.computeVertexNormals();
   }
 
   renderer.render(scene, camera);
