@@ -1,0 +1,390 @@
+import * as THREE from 'three';
+import { Sky } from 'three/addons/objects/Sky.js';
+import './style.css';
+
+// A performance-conscious Three.js open-world prototype.
+// The same terrainHeight() function positions the terrain, road, vegetation
+// and player, preventing props from being placed at an unrelated y = 0 level.
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xb9d7e5);
+scene.fog = new THREE.FogExp2(0xb9d7e5, 0.0026);
+
+const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 650);
+const renderer = new THREE.WebGLRenderer({
+  antialias: true,
+  powerPreference: 'low-power'
+});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.querySelector('#game').appendChild(renderer.domElement);
+
+// --- Atmosphere and sunlight -------------------------------------------------
+const sky = new Sky();
+sky.scale.setScalar(450000);
+scene.add(sky);
+
+const skyUniforms = sky.material.uniforms;
+skyUniforms.turbidity.value = 7;
+skyUniforms.rayleigh.value = 2.2;
+skyUniforms.mieCoefficient.value = 0.006;
+skyUniforms.mieDirectionalG.value = 0.82;
+
+const sunDirection = new THREE.Vector3().setFromSphericalCoords(
+  1,
+  THREE.MathUtils.degToRad(88),
+  THREE.MathUtils.degToRad(205)
+);
+skyUniforms.sunPosition.value.copy(sunDirection);
+
+scene.add(new THREE.HemisphereLight(0xd8edff, 0x596344, 1.35));
+
+const sun = new THREE.DirectionalLight(0xffe5c2, 2.1);
+sun.position.copy(sunDirection).multiplyScalar(120);
+sun.castShadow = true;
+sun.shadow.mapSize.set(1024, 1024);
+sun.shadow.camera.left = -70;
+sun.shadow.camera.right = 70;
+sun.shadow.camera.top = 70;
+sun.shadow.camera.bottom = -70;
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far = 250;
+sun.shadow.bias = -0.00025;
+scene.add(sun);
+
+// --- Shared procedural terrain ------------------------------------------------
+function terrainHeight(x, z) {
+  return (
+    Math.sin(x * 0.030) * 1.45 +
+    Math.cos(z * 0.026) * 1.25 +
+    Math.sin((x + z) * 0.017) * 1.7 +
+    Math.cos((x - z) * 0.012) * 0.65
+  );
+}
+
+const terrainGeometry = new THREE.PlaneGeometry(320, 320, 120, 120);
+const terrainPositions = terrainGeometry.attributes.position;
+
+for (let i = 0; i < terrainPositions.count; i++) {
+  const x = terrainPositions.getX(i);
+  const z = -terrainPositions.getY(i);
+  terrainPositions.setZ(i, terrainHeight(x, z));
+}
+terrainGeometry.computeVertexNormals();
+
+const ground = new THREE.Mesh(
+  terrainGeometry,
+  new THREE.MeshStandardMaterial({
+    color: 0x718b58,
+    roughness: 1,
+    metalness: 0
+  })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// --- Curving road whose surface follows the terrain -------------------------
+function roadCenterX(z) {
+  return Math.sin(z * 0.012) * 3.2;
+}
+
+function createRoad() {
+  const segments = 180;
+  const halfWidth = 4.4;
+  const vertices = [];
+  const indices = [];
+
+  for (let i = 0; i <= segments; i++) {
+    const z = -155 + (310 * i / segments);
+    const centerX = roadCenterX(z);
+    const leftX = centerX - halfWidth;
+    const rightX = centerX + halfWidth;
+
+    vertices.push(leftX, terrainHeight(leftX, z) + 0.10, z);
+    vertices.push(rightX, terrainHeight(rightX, z) + 0.10, z);
+
+    if (i < segments) {
+      const a = i * 2;
+      indices.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    }
+  }
+
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+  geometry.setIndex(indices);
+  geometry.computeVertexNormals();
+
+  const road = new THREE.Mesh(
+    geometry,
+    new THREE.MeshStandardMaterial({
+      color: 0x555957,
+      roughness: 0.96,
+      side: THREE.DoubleSide
+    })
+  );
+  road.receiveShadow = true;
+  scene.add(road);
+
+  for (const side of [-1, 1]) {
+    const points = [];
+    for (let i = 0; i <= segments; i++) {
+      const z = -155 + (310 * i / segments);
+      const x = roadCenterX(z) + side * (halfWidth - 0.22);
+      points.push(new THREE.Vector3(x, terrainHeight(x, z) + 0.16, z));
+    }
+
+    const edge = new THREE.Mesh(
+      new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), segments, 0.045, 4, false),
+      new THREE.MeshStandardMaterial({ color: 0xd8d2b6, roughness: 1 })
+    );
+    scene.add(edge);
+  }
+}
+createRoad();
+
+// --- Distant rolling hills ----------------------------------------------------
+const hillMaterial = new THREE.MeshStandardMaterial({
+  color: 0x82977b,
+  roughness: 1
+});
+
+for (let i = 0; i < 20; i++) {
+  const radius = 18 + Math.random() * 22;
+  const hill = new THREE.Mesh(
+    new THREE.SphereGeometry(radius, 14, 10),
+    hillMaterial
+  );
+  const angle = (i / 20) * Math.PI * 2;
+  const distance = 135 + Math.random() * 35;
+  hill.position.set(
+    Math.cos(angle) * distance,
+    -radius * 0.54,
+    Math.sin(angle) * distance
+  );
+  hill.scale.y = 0.52;
+  hill.receiveShadow = true;
+  scene.add(hill);
+}
+
+// --- Terrain-aligned forest ---------------------------------------------------
+const trunkMaterial = new THREE.MeshStandardMaterial({
+  color: 0x59402e,
+  roughness: 1
+});
+const leafMaterials = [
+  new THREE.MeshStandardMaterial({ color: 0x315b39, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x416b43, roughness: 1 }),
+  new THREE.MeshStandardMaterial({ color: 0x52784a, roughness: 1 })
+];
+
+const trunkGeometry = new THREE.CylinderGeometry(0.16, 0.25, 2.1, 7);
+const crownGeometry = new THREE.ConeGeometry(1.35, 3.5, 7);
+
+for (let i = 0; i < 190; i++) {
+  const x = (Math.random() - 0.5) * 285;
+  const z = (Math.random() - 0.5) * 290;
+
+  if (Math.abs(x - roadCenterX(z)) < 8) continue;
+
+  const tree = new THREE.Group();
+
+  const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+  trunk.position.y = 1.05;
+  trunk.castShadow = true;
+  tree.add(trunk);
+
+  const crown = new THREE.Mesh(crownGeometry, leafMaterials[i % leafMaterials.length]);
+  crown.position.y = 3.05;
+  crown.castShadow = true;
+  tree.add(crown);
+
+  const scale = 0.72 + Math.random() * 0.55;
+  tree.scale.setScalar(scale);
+  tree.position.set(x, terrainHeight(x, z), z);
+  tree.rotation.y = Math.random() * Math.PI * 2;
+  scene.add(tree);
+}
+
+// Instanced grass keeps draw calls low.
+const grassGeometry = new THREE.ConeGeometry(0.13, 0.65, 4);
+const grassMaterial = new THREE.MeshStandardMaterial({
+  color: 0x78965a,
+  roughness: 1
+});
+const grass = new THREE.InstancedMesh(grassGeometry, grassMaterial, 600);
+const grassDummy = new THREE.Object3D();
+let grassIndex = 0;
+
+for (let i = 0; i < 600; i++) {
+  const x = (Math.random() - 0.5) * 290;
+  const z = (Math.random() - 0.5) * 290;
+  if (Math.abs(x - roadCenterX(z)) < 6) continue;
+
+  grassDummy.position.set(x, terrainHeight(x, z) + 0.28, z);
+  grassDummy.rotation.set(0, Math.random() * Math.PI, 0);
+  const scale = 0.5 + Math.random() * 0.8;
+  grassDummy.scale.set(scale, scale, scale);
+  grassDummy.updateMatrix();
+  grass.setMatrixAt(grassIndex++, grassDummy.matrix);
+}
+grass.count = grassIndex;
+scene.add(grass);
+
+// --- Procedural third-person character ---------------------------------------
+// This is a lightweight placeholder model. A rigged GLB character can replace
+// it later for professional animation and more detailed clothing.
+const player = new THREE.Group();
+const character = new THREE.Group();
+player.add(character);
+
+const jacket = new THREE.MeshStandardMaterial({ color: 0x344b60, roughness: 0.88 });
+const trousers = new THREE.MeshStandardMaterial({ color: 0x303638, roughness: 0.95 });
+const skin = new THREE.MeshStandardMaterial({ color: 0xc58e6b, roughness: 0.9 });
+const dark = new THREE.MeshStandardMaterial({ color: 0x20282b, roughness: 0.95 });
+const boots = new THREE.MeshStandardMaterial({ color: 0x292724, roughness: 1 });
+
+function addPart(parent, geometry, material, position) {
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.set(...position);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+// Torso, neck, head and cap.
+addPart(character, new THREE.CapsuleGeometry(0.39, 0.62, 4, 8), jacket, [0, 1.32, 0]);
+addPart(character, new THREE.CylinderGeometry(0.12, 0.13, 0.18, 8), skin, [0, 1.86, 0]);
+addPart(character, new THREE.SphereGeometry(0.29, 14, 12), skin, [0, 2.13, 0]);
+addPart(
+  character,
+  new THREE.SphereGeometry(0.30, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.48),
+  dark,
+  [0, 2.22, 0.015]
+);
+addPart(character, new THREE.BoxGeometry(0.48, 0.62, 0.22), dark, [0, 1.38, 0.34]);
+
+const leftArm = new THREE.Group();
+leftArm.position.set(-0.48, 1.58, 0);
+character.add(leftArm);
+addPart(leftArm, new THREE.CapsuleGeometry(0.115, 0.48, 3, 6), jacket, [0, -0.31, 0]);
+addPart(leftArm, new THREE.SphereGeometry(0.12, 8, 8), skin, [0, -0.63, 0]);
+
+const rightArm = new THREE.Group();
+rightArm.position.set(0.48, 1.58, 0);
+character.add(rightArm);
+addPart(rightArm, new THREE.CapsuleGeometry(0.115, 0.48, 3, 6), jacket, [0, -0.31, 0]);
+addPart(rightArm, new THREE.SphereGeometry(0.12, 8, 8), skin, [0, -0.63, 0]);
+
+const leftLeg = new THREE.Group();
+leftLeg.position.set(-0.19, 0.83, 0);
+character.add(leftLeg);
+addPart(leftLeg, new THREE.CapsuleGeometry(0.15, 0.52, 3, 6), trousers, [0, -0.31, 0]);
+addPart(leftLeg, new THREE.BoxGeometry(0.25, 0.14, 0.42), boots, [0, -0.67, -0.08]);
+
+const rightLeg = new THREE.Group();
+rightLeg.position.set(0.19, 0.83, 0);
+character.add(rightLeg);
+addPart(rightLeg, new THREE.CapsuleGeometry(0.15, 0.52, 3, 6), trousers, [0, -0.31, 0]);
+addPart(rightLeg, new THREE.BoxGeometry(0.25, 0.14, 0.42), boots, [0, -0.67, -0.08]);
+
+player.position.set(0, terrainHeight(0, 12), 12);
+scene.add(player);
+
+// --- Keyboard and camera controls --------------------------------------------
+const keys = {};
+addEventListener('keydown', (event) => {
+  keys[event.code] = true;
+});
+addEventListener('keyup', (event) => {
+  keys[event.code] = false;
+});
+addEventListener('blur', () => {
+  for (const key in keys) keys[key] = false;
+});
+
+let yaw = 0;
+let dragging = false;
+let lastPointerX = 0;
+
+renderer.domElement.addEventListener('pointerdown', (event) => {
+  dragging = true;
+  lastPointerX = event.clientX;
+  renderer.domElement.setPointerCapture(event.pointerId);
+});
+renderer.domElement.addEventListener('pointerup', () => {
+  dragging = false;
+});
+renderer.domElement.addEventListener('pointercancel', () => {
+  dragging = false;
+});
+renderer.domElement.addEventListener('pointermove', (event) => {
+  if (!dragging) return;
+  yaw -= (event.clientX - lastPointerX) * 0.005;
+  lastPointerX = event.clientX;
+});
+
+const clock = new THREE.Clock();
+const cameraOffset = new THREE.Vector3(0, 4.8, 8.8);
+const cameraTarget = new THREE.Vector3();
+const upAxis = new THREE.Vector3(0, 1, 0);
+let walkTime = 0;
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+  const right = new THREE.Vector3(forward.z, 0, -forward.x);
+  const direction = new THREE.Vector3();
+
+  if (keys.KeyW || keys.ArrowUp) direction.addScaledVector(forward, -1);
+  if (keys.KeyS || keys.ArrowDown) direction.addScaledVector(forward, 1);
+  if (keys.KeyA || keys.ArrowLeft) direction.addScaledVector(right, -1);
+  if (keys.KeyD || keys.ArrowRight) direction.addScaledVector(right, 1);
+
+  let moving = false;
+  if (direction.lengthSq() > 0) {
+    moving = true;
+    direction.normalize();
+    const running = keys.ShiftLeft || keys.ShiftRight;
+    const speed = running ? 10.5 : 5.5;
+    player.position.addScaledVector(direction, speed * dt);
+    player.rotation.y = Math.atan2(direction.x, direction.z);
+    walkTime += dt * (running ? 12 : 8);
+  }
+
+  player.position.x = THREE.MathUtils.clamp(player.position.x, -150, 150);
+  player.position.z = THREE.MathUtils.clamp(player.position.z, -150, 150);
+  player.position.y = terrainHeight(player.position.x, player.position.z);
+
+  const swing = moving ? Math.sin(walkTime) * 0.48 : 0;
+  leftLeg.rotation.x = swing;
+  rightLeg.rotation.x = -swing;
+  leftArm.rotation.x = -swing * 0.7;
+  rightArm.rotation.x = swing * 0.7;
+  character.position.y = moving ? Math.abs(Math.sin(walkTime * 2)) * 0.045 : 0;
+
+  const rotatedOffset = cameraOffset.clone().applyAxisAngle(upAxis, yaw);
+  cameraTarget.copy(player.position).add(rotatedOffset);
+  camera.position.lerp(cameraTarget, 1 - Math.pow(0.001, dt));
+  camera.lookAt(player.position.x, player.position.y + 1.45, player.position.z);
+
+  renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.35));
+});
+
+document.querySelector('#loading').classList.add('hidden');
