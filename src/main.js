@@ -30,8 +30,8 @@ sky.scale.setScalar(450000);
 scene.add(sky);
 
 const skyUniforms = sky.material.uniforms;
-skyUniforms.turbidity.value = 7;
-skyUniforms.rayleigh.value = 2.2;
+skyUniforms.turbidity.value = 5.5;
+skyUniforms.rayleigh.value = 2.6;
 skyUniforms.mieCoefficient.value = 0.006;
 skyUniforms.mieDirectionalG.value = 0.82;
 
@@ -42,9 +42,9 @@ const sunDirection = new THREE.Vector3().setFromSphericalCoords(
 );
 skyUniforms.sunPosition.value.copy(sunDirection);
 
-scene.add(new THREE.HemisphereLight(0xd8edff, 0x596344, 1.35));
+scene.add(new THREE.HemisphereLight(0xdceeff, 0x526044, 1.48));
 
-const sun = new THREE.DirectionalLight(0xffe5c2, 2.1);
+const sun = new THREE.DirectionalLight(0xffe8c9, 2.3);
 sun.position.copy(sunDirection).multiplyScalar(120);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
@@ -83,12 +83,32 @@ for (let i = 0; i < terrainPositions.count; i++) {
   const z = -terrainPositions.getY(i);
   terrainPositions.setZ(i, terrainHeight(x, z));
 }
+// Subtle vertex-colour variation breaks up the single-flat-green terrain.
+const terrainColors = new Float32Array(terrainPositions.count * 3);
+const meadowLow = new THREE.Color(0x536f43);
+const meadowHigh = new THREE.Color(0x82965b);
+const meadowPatch = new THREE.Color();
+for (let i = 0; i < terrainPositions.count; i++) {
+  const x = terrainPositions.getX(i);
+  const z = -terrainPositions.getY(i);
+  const variation = THREE.MathUtils.clamp(
+    0.48 + Math.sin(x * 0.075) * 0.13 + Math.cos(z * 0.061) * 0.12
+      + Math.sin((x + z) * 0.11) * 0.08,
+    0, 1
+  );
+  meadowPatch.lerpColors(meadowLow, meadowHigh, variation);
+  terrainColors[i * 3] = meadowPatch.r;
+  terrainColors[i * 3 + 1] = meadowPatch.g;
+  terrainColors[i * 3 + 2] = meadowPatch.b;
+}
+terrainGeometry.setAttribute('color', new THREE.Float32BufferAttribute(terrainColors, 3));
 terrainGeometry.computeVertexNormals();
 
 const ground = new THREE.Mesh(
   terrainGeometry,
   new THREE.MeshStandardMaterial({
-    color: 0x718b58,
+    color: 0xffffff,
+    vertexColors: true,
     roughness: 1,
     metalness: 0
   })
@@ -423,6 +443,7 @@ broadleafClusters.count = speciesCounts[1] * 3;
 tallCrown.count = speciesCounts[2];
 allTreeMeshes.forEach(mesh => {
   mesh.instanceMatrix.needsUpdate = true;
+  if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
   scene.add(mesh);
 });
 // Instanced grass keeps draw calls low.
