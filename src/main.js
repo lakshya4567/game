@@ -285,32 +285,70 @@ const spruceTierGeometry = [
   new THREE.ConeGeometry(1.7, 4.2, 7)
 ];
 
-// Taller layered spruce trees, kept clear of roads and the river corridor.
-for (let i = 0; i < 245; i++) {
+// 100x forest density, rendered with instancing to keep draw calls low.
+// Individual tree trunks still get collision through a small spatial grid.
+const TREE_COUNT = 24500;
+const treeColliders = [];
+const TREE_CELL_SIZE = 12;
+const treeCollisionGrid = new Map();
+const treeTrunkInstances = new THREE.InstancedMesh(trunkGeometry, trunkMaterial, TREE_COUNT);
+const treeCrownInstances = spruceTierGeometry.map((geometry, tier) =>
+  new THREE.InstancedMesh(geometry, spruceMaterials[tier], TREE_COUNT)
+);
+treeTrunkInstances.castShadow = false;
+treeTrunkInstances.receiveShadow = false;
+treeCrownInstances.forEach((mesh) => {
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+});
+const treeDummy = new THREE.Object3D();
+const reservedVillageZones = [
+  { x: -42, z: -76 }, { x: 112, z: 82 }, { x: -96, z: 42 }
+];
+let placedTrees = 0;
+let attempts = 0;
+while (placedTrees < TREE_COUNT && attempts < TREE_COUNT * 12) {
+  attempts++;
   const x = (Math.random() - 0.5) * 480;
   const z = (Math.random() - 0.5) * 480;
-  if (Math.abs(x - roadCenterX(z)) < 9) continue;
-  if (Math.abs(z - (Math.sin(x * 0.014) * 5 - 28)) < 7) continue;
-  if (Math.abs(x - riverCenterX(z)) < 10) continue;
-
-  const tree = new THREE.Group();
-  const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-  trunk.position.y = 1.6;
-  trunk.castShadow = true;
-  tree.add(trunk);
-
-  for (let tier = 0; tier < 3; tier++) {
-    const crown = new THREE.Mesh(spruceTierGeometry[tier], spruceMaterials[(i + tier) % spruceMaterials.length]);
-    crown.position.y = 3.4 + tier * 1.9;
-    crown.castShadow = true;
-    tree.add(crown);
-  }
+  if (Math.abs(x - roadCenterX(z)) < 10) continue;
+  if (Math.abs(z - (Math.sin(x * 0.014) * 5 - 28)) < 8) continue;
+  if (Math.abs(x - riverCenterX(z)) < 11) continue;
+  if (reservedVillageZones.some(v => Math.hypot(x - v.x, z - v.z) < 34)) continue;
 
   const scale = 1.35 + Math.random() * 0.65;
-  tree.scale.setScalar(scale);
-  tree.position.set(x, terrainHeight(x, z), z);
-  tree.rotation.y = Math.random() * Math.PI * 2;
-  scene.add(tree);
+  const rotation = Math.random() * Math.PI * 2;
+  const groundY = terrainHeight(x, z);
+  treeDummy.position.set(x, groundY + 1.6 * scale, z);
+  treeDummy.rotation.set(0, rotation, 0);
+  treeDummy.scale.setScalar(scale);
+  treeDummy.updateMatrix();
+  treeTrunkInstances.setMatrixAt(placedTrees, treeDummy.matrix);
+
+  for (let tier = 0; tier < 3; tier++) {
+    treeDummy.position.set(x, groundY + (3.4 + tier * 1.9) * scale, z);
+    treeDummy.rotation.set(0, rotation, 0);
+    treeDummy.scale.setScalar(scale);
+    treeDummy.updateMatrix();
+    treeCrownInstances[tier].setMatrixAt(placedTrees, treeDummy.matrix);
+  }
+
+  const cellX = Math.floor(x / TREE_CELL_SIZE);
+  const cellZ = Math.floor(z / TREE_CELL_SIZE);
+  const cellKey = cellX + ',' + cellZ;
+  if (!treeCollisionGrid.has(cellKey)) treeCollisionGrid.set(cellKey, []);
+  const collider = { x, z, radius: 0.62 * scale + 0.48 };
+  treeCollisionGrid.get(cellKey).push(collider);
+  treeColliders.push(collider);
+  placedTrees++;
+}
+treeTrunkInstances.count = placedTrees;
+treeTrunkInstances.instanceMatrix.needsUpdate = true;
+scene.add(treeTrunkInstances);
+for (const mesh of treeCrownInstances) {
+  mesh.count = placedTrees;
+  mesh.instanceMatrix.needsUpdate = true;
+  scene.add(mesh);
 }
 
 // Instanced grass keeps draw calls low.
@@ -457,12 +495,15 @@ function createHouse(x, z, scale = 1, style = 0) {
 
   house.scale.setScalar(scale);
   house.position.set(x, terrainHeight(x, z), z);
-  house.rotation.y = (Math.random() - 0.5) * 0.35;
+  const houseRotation = (Math.random() - 0.5) * 0.35;
+  house.rotation.y = houseRotation;
   scene.add(house);
-  // Conservative circular footprint keeps the player outside walls and corners.
+  // Oriented rectangular footprint closely follows the actual building walls.
+  // A small player-radius margin prevents the character clipping the corners.
   houseColliders.push({
-    x, z,
-    radius: Math.hypot(width * scale * 0.56, depth * scale * 0.56) + 1.15
+    x, z, rotation: houseRotation,
+    halfWidth: width * scale / 2 + 0.48,
+    halfDepth: depth * scale / 2 + 0.48
   });
 
   const fenceMaterial = new THREE.MeshStandardMaterial({ color: 0x8a7759, roughness: 1 });
@@ -785,18 +826,44 @@ function animate() {
     return houseColliders.some((house) => {
       const dx = x - house.x;
       const dz = z - house.z;
-      return dx * dx + dz * dz < house.radius * house.radius;
+      const c = Math.cos(house.rotation);
+      const sn = Math.sin(house.rotation);
+      const localX = dx * c - dz * sn;
+      const localZ = dx * sn + dz * c;
+      return Math.abs(localX) < house.halfWidth && Math.abs(localZ) < house.halfDepth;
     });
   }
 
-  // Resolve axes separately so the player can slide along a building wall.
+  function blockedByTree(x, z) {
+    const cellX = Math.floor(x / TREE_CELL_SIZE);
+    const cellZ = Math.floor(z / TREE_CELL_SIZE);
+    // Only inspect nearby grid cells instead of all 24,500 trees each frame.
+    for (let gx = cellX - 1; gx <= cellX + 1; gx++) {
+      for (let gz = cellZ - 1; gz <= cellZ + 1; gz++) {
+        const nearby = treeCollisionGrid.get(gx + ',' + gz);
+        if (!nearby) continue;
+        for (const tree of nearby) {
+          const dx = x - tree.x;
+          const dz = z - tree.z;
+          if (dx * dx + dz * dz < tree.radius * tree.radius) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  function blockedByObstacle(x, z) {
+    return blockedByHouse(x, z) || blockedByTree(x, z);
+  }
+
+  // Resolve axes separately for accurate wall/tree sliding.
   let resolvedX = nextX;
   let resolvedZ = nextZ;
-  if (blockedByHouse(resolvedX, resolvedZ)) {
-    if (!blockedByHouse(nextX, previousZ)) {
+  if (blockedByObstacle(resolvedX, resolvedZ)) {
+    if (!blockedByObstacle(nextX, previousZ)) {
       resolvedZ = previousZ;
       velocity.z = 0;
-    } else if (!blockedByHouse(previousX, nextZ)) {
+    } else if (!blockedByObstacle(previousX, nextZ)) {
       resolvedX = previousX;
       velocity.x = 0;
     } else {
