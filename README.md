@@ -163,5 +163,6 @@ Update this README.md with every future project update, including new features, 
 - Added small-trunk trees to a portion of the woodland so the forest has more low-branching silhouettes alongside tall bare-trunk trees.
 - Built a timber road bridge with an arched deck, railings, posts and stone supports over the river where the crossroad passes.
 - Added separate dirt-and-gravel access lanes connecting all three villages to the main road network; the eastern village lane joins the crossroad on the far riverbank.
+- Expanded meadow grass from 600 to 2,200 instanced blades, with several natural green/yellow-green shades.
 - Expanded forest-floor variety with instanced shrubs, leafy bushes, fern-like plants and small flower patches in several colours.
 - Kept the new vegetation instanced and lightweight, with clear areas around roads, riverbanks and village clusters.
